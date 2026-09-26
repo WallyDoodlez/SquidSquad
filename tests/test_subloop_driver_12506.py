@@ -87,7 +87,7 @@ class TestLazyEnable:
         state = sd.read_state("skill")
         assert state["armed"] is False
         assert state["scan_count"] == 0
-        assert not sd._state_path("skill").exists()
+        assert not sd._driver_file("skill").exists()
 
     def test_first_idle_arms_and_schedules(self, isolated):
         res = sd.arm("skill")
@@ -242,20 +242,20 @@ class TestStatePersistence:
     def test_round_trip(self, isolated):
         sd.arm("skill")
         sd.record_scan("skill", now=T0)
-        on_disk = json.loads(sd._state_path("skill").read_text(encoding="utf-8"))
+        on_disk = json.loads(sd._driver_file("skill").read_text(encoding="utf-8"))
         assert on_disk["armed"] is True
         assert on_disk["scan_count"] == 1
         assert on_disk["last_run"] == T0
 
     def test_corrupt_state_falls_back_to_default(self, isolated):
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{not valid json", encoding="utf-8")
         state = sd.read_state("skill")
         assert state == sd._DEFAULT_STATE
 
     def test_non_dict_json_falls_back_to_default(self, isolated):
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("[1, 2, 3]", encoding="utf-8")
         assert sd.read_state("skill") == sd._DEFAULT_STATE
@@ -263,7 +263,7 @@ class TestStatePersistence:
     def test_type_corrupt_scan_count_falls_back(self, isolated):
         # DS finding #2: a valid-JSON but wrong-typed field must not crash
         # downstream callers (scan_count would do str + int).
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"armed": true, "scan_count": "not-an-int", "last_run": null}',
                         encoding="utf-8")
@@ -272,7 +272,7 @@ class TestStatePersistence:
     def test_numeric_last_run_coerced_to_str_then_tolerated(self, isolated):
         # A numeric last_run (manual corruption) coerces to str; cooldown_elapsed
         # then treats the unparseable value as elapsed rather than crashing.
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"armed": true, "scan_count": 0, "last_run": 1700000000}',
                         encoding="utf-8")
@@ -285,7 +285,7 @@ class TestStatePersistence:
         # #13722: bool("false") == True in Python -- a hand-edited operator
         # intent to disarm ({"armed": "false"}, a JSON string) must NOT flip
         # the driver back on. Only an exact JSON `true` counts as armed.
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"armed": "false", "scan_count": 0, "last_run": null}',
                         encoding="utf-8")
@@ -294,7 +294,7 @@ class TestStatePersistence:
     def test_hand_edited_armed_true_string_also_coerces_to_false(self, isolated):
         # #13722: any string value -- even "true" -- is type-corruption, not a
         # trusted signal. Only the exact JSON boolean `true` is honored.
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"armed": "true", "scan_count": 0, "last_run": null}',
                         encoding="utf-8")
@@ -303,7 +303,7 @@ class TestStatePersistence:
     def test_armed_numeric_one_coerces_to_false(self, isolated):
         # #13722: same class -- a hand-edited {"armed": 1} (numeric, not a
         # real JSON boolean) is also treated as corruption, not "truthy armed".
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"armed": 1, "scan_count": 0, "last_run": null}',
                         encoding="utf-8")
@@ -312,7 +312,7 @@ class TestStatePersistence:
     def test_real_json_booleans_still_honored(self, isolated):
         # Sanity: the normal programmatic round-trip (write_state always emits
         # real JSON booleans) is unaffected by the #13722 fix.
-        path = sd._state_path("skill")
+        path = sd._driver_file("skill")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"armed": true, "scan_count": 0, "last_run": null}',
                         encoding="utf-8")

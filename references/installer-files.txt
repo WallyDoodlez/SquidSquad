@@ -54,7 +54,6 @@ references/scripts/l4_removal.py
 references/scripts/l4_write_commit.py
 references/scripts/link_stage_validator.py
 references/scripts/manifest.py
-references/scripts/migrate_state_branch.py
 references/scripts/model_router.py
 references/scripts/orphan_cleanup.py
 references/scripts/process_utils.py
@@ -67,7 +66,6 @@ references/scripts/squidsquad_cli.py
 references/scripts/soul_adaptation.py
 references/scripts/source_frontmatter.py
 references/scripts/start_team.py
-references/scripts/state_bus.py
 references/scripts/statusline_data.py
 references/scripts/subloop_driver.py
 references/scripts/tc_coverage.py

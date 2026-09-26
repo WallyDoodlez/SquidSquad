@@ -27,13 +27,14 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 
-# Import state_bus for path resolution (#3664)
 sys.path.insert(0, str(SCRIPT_DIR))
-try:
-    from state_bus import state_path as _state_path
-except ImportError:
-    def _state_path(rel):
-        return SQUIDSQUAD_DIR / rel
+
+
+def _squid_path(rel):
+    """Agent state lives on main under .squidsquad/ (#14144 retired the
+    state-branch worktree that used to shadow these paths)."""
+    return SQUIDSQUAD_DIR / rel
+
 
 from shared_fs import atomic_write_text  # #10007
 
@@ -131,13 +132,13 @@ def status_bar_self(phase, description=""):
     return status_bar(role, phase, description)
 
 
-def _get_working_state_path(role):
-    return _state_path(f"{role}/working-state.md")
+def _get_working_squid_path(role):
+    return _squid_path(f"{role}/working-state.md")
 
 
 def _read_counter(role):
     """Read quiet cycle counter without printing (#7610)."""
-    ws_path = _get_working_state_path(role)
+    ws_path = _get_working_squid_path(role)
     if not ws_path.exists():
         return 0
     text = ws_path.read_text(encoding="utf-8")
@@ -154,7 +155,7 @@ def get_counter(role):
 
 def set_counter(role, value):
     """Set quiet cycle counter in working-state.md (upserts if field absent)."""
-    ws_path = _get_working_state_path(role)
+    ws_path = _get_working_squid_path(role)
     if not ws_path.exists():
         return
     text = ws_path.read_text(encoding="utf-8")
@@ -195,7 +196,7 @@ def log_iteration(role, n, quiet=False, work=None, notes="",
     Legacy params (bugs/features/issues/tasks/tests) are converted to work bullets.
     """
     ts = _now().strftime("%Y-%m-%d %H:%M")
-    iter_dir = _state_path(f"{role}/iterations")
+    iter_dir = _squid_path(f"{role}/iterations")
     iter_dir.mkdir(parents=True, exist_ok=True)
     path = iter_dir / f"iter-{n}.md"
 
@@ -238,7 +239,7 @@ def log_iteration(role, n, quiet=False, work=None, notes="",
 
 def cleanup_iterations(role, keep=20):
     """Remove oldest iteration files, keeping the most recent `keep` count."""
-    iter_dir = _state_path(f"{role}/iterations")
+    iter_dir = _squid_path(f"{role}/iterations")
     if not iter_dir.exists():
         return 0
 

@@ -295,18 +295,15 @@ class TestSuggestTargetsAutoPrune:
 
 
 class TestResolveScanHistoryPath:
-    def test_prefers_state_worktree_when_present(self, tmp_path):
-        state_file = tmp_path / ".squidsquad-state" / "skill" / "scan-history.md"
-        state_file.parent.mkdir(parents=True)
-        state_file.write_text("# Scan History\n", encoding="utf-8")
-        main_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
-        main_file.parent.mkdir(parents=True)
-        main_file.write_text("# Scan History\n", encoding="utf-8")
-
+    def test_ignores_a_leftover_state_worktree(self, tmp_path):
+        """#14144: main is the single location, even if an old worktree lingers."""
+        stale = tmp_path / ".squidsquad-state" / "skill" / "scan-history.md"
+        stale.parent.mkdir(parents=True)
+        stale.write_text("# Scan History\n", encoding="utf-8")
         resolved = scan_index._resolve_scan_history_path("skill", tmp_path)
-        assert resolved == state_file
+        assert resolved == tmp_path / ".squidsquad" / "skill" / "scan-history.md"
 
-    def test_falls_back_to_main_when_no_state_worktree(self, tmp_path):
+    def test_resolves_to_main(self, tmp_path):
         resolved = scan_index._resolve_scan_history_path("skill", tmp_path)
         assert resolved == tmp_path / ".squidsquad" / "skill" / "scan-history.md"
 

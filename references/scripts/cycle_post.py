@@ -27,19 +27,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUID_DIR = REPO_ROOT / ".squidsquad"
 
-# Import state_bus for path resolution and state-branch commits (#3664)
 sys.path.insert(0, str(SCRIPT_DIR))
-try:
-    from state_bus import state_path as _state_path, is_state_file, commit_and_push as _state_commit, _worktree_exists
-except ImportError:
-    def _state_path(rel):
-        return SQUID_DIR / rel
-    def is_state_file(rel):
-        return False
-    def _state_commit(msg, role="unknown"):
-        return True
-    def _worktree_exists():
-        return False
+
+
+def _squid_path(rel):
+    """Agent state lives on main under .squidsquad/ (#14144 retired the
+    state-branch worktree and its separate state commit)."""
+    return SQUID_DIR / rel
 
 from shared_fs import atomic_write_text  # #10007
 
@@ -595,11 +589,6 @@ def _do_commit_push(data, role):
         _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
         _warn_if_role_files_uncommitted(role, working)
 
-    # Commit state files to state branch if worktree exists (#3664)
-    if _worktree_exists():
-        state_msg = f"cycle {data.get('cycle_number', '?')} state"
-        _state_commit(state_msg, role)
-
 
 def _recover_orphaned_tag(new_version):
     """Self-heal a half-completed prior bump (#10241).
@@ -958,7 +947,7 @@ def _do_working_state_update(data, role):
               f"{WS_WRITE_WARN_BYTES // 1024} KB of it (#13562). Rewrite it "
               f"down to spec.", file=sys.stderr)
 
-    ws_path = _state_path(f"{role}/working-state.md")
+    ws_path = _squid_path(f"{role}/working-state.md")
     ws_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(ws_path, update)
 

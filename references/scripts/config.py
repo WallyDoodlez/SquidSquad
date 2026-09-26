@@ -152,7 +152,6 @@ FIELD_MAP = {
     "forge-owner": ("Forge Backend", "Owner"),
     "forge-repo": ("Forge Backend", "Repo"),
     "working-branch": ("Git Branches", "Working Branch"),
-    "state-branch": ("Git Branches", "State Branch"),
     "branch-pattern": ("Git Branches", "Branch Pattern"),
     "harness-enabled": ("Harness", "Enabled"),
     "harness-port": ("Harness", "Port"),

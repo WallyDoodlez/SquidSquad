@@ -33,9 +33,9 @@ def patch_dirs(squid_dir, tmp_path, monkeypatch):
     """Patch REPO_ROOT, SQUID_DIR, and _state_path to use tmp_path."""
     monkeypatch.setattr(cycle_pre, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(cycle_pre, "SQUID_DIR", squid_dir)
-    # _state_path is imported from state_bus at load time — patch it so
+    # _squid_path resolves under SQUID_DIR — patch it so
     # working state, iterations, etc. resolve to the temp directory
-    monkeypatch.setattr(cycle_pre, "_state_path", lambda rel: squid_dir / rel)
+    monkeypatch.setattr(cycle_pre, "_squid_path", lambda rel: squid_dir / rel)
     return tmp_path
 
 

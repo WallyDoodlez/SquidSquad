@@ -107,13 +107,7 @@ def _block_live_harness_egress(monkeypatch):
     except ImportError:
         pass
 
-    # #14108: _do_commit_push ends with `if _worktree_exists(): _state_commit()`.
-    # On a clone with a real .squidsquad-state worktree, every test reaching it
-    # ran state_bus.commit_and_push for real: `git add -A` + commit in the live
-    # worktree, then a push of the live state branch when anything was dirty.
-    # Default the probe to "no worktree"; tests exercising the state-bus path
-    # re-patch _worktree_exists (and _state_commit) in their own bodies.
-    monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+    # (#14144 retired the state-branch commit path this fixture used to stub.)
 
 
 # ---------------------------------------------------------------------------
@@ -1865,7 +1859,7 @@ class TestDoWorkingStateUpdate:
 
     def test_writes_update_content(self, squid_dir, patch_dirs, monkeypatch):
         """Non-empty update is written to working-state.md."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
 
         update_text = "# Working State\n\n- **Task**: #42\n- **Status**: in-progress\n"
         cycle_post._do_working_state_update({"working_state_update": update_text}, "skill")
@@ -1876,7 +1870,7 @@ class TestDoWorkingStateUpdate:
 
     def test_none_update_is_noop(self, squid_dir, patch_dirs, monkeypatch):
         """None working_state_update does not write or create file."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
         ws = squid_dir / "skill" / "working-state.md"
 
         cycle_post._do_working_state_update({"working_state_update": None}, "skill")
@@ -1884,7 +1878,7 @@ class TestDoWorkingStateUpdate:
 
     def test_missing_key_is_noop(self, squid_dir, patch_dirs, monkeypatch):
         """Missing working_state_update key does not write or create file."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
         ws = squid_dir / "skill" / "working-state.md"
 
         cycle_post._do_working_state_update({}, "skill")
@@ -1892,7 +1886,7 @@ class TestDoWorkingStateUpdate:
 
     def test_empty_string_is_noop(self, squid_dir, patch_dirs, monkeypatch):
         """Empty string working_state_update is treated as falsy — no write."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
         ws = squid_dir / "skill" / "working-state.md"
 
         cycle_post._do_working_state_update({"working_state_update": ""}, "skill")
@@ -1903,7 +1897,7 @@ class TestDoWorkingStateUpdate:
         """#13562: a >WS_WRITE_WARN_BYTES update emits the size warning to
         stderr but is still written in full — the file is agent-owned; the
         embed-side cap in cycle_pre is what bounds token cost."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
         big = "# Working State\n" + ("journal line\n" *
                                      (cycle_post.WS_WRITE_WARN_BYTES // 10))
         cycle_post._do_working_state_update({"working_state_update": big}, "dm")
@@ -1915,14 +1909,14 @@ class TestDoWorkingStateUpdate:
     def test_lean_write_no_warning(self, squid_dir, patch_dirs, monkeypatch,
                                    capsys):
         """#13562: a spec-shaped lean update writes silently."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
         lean = "# Working State\n\n- **Task**: none\n"
         cycle_post._do_working_state_update({"working_state_update": lean}, "dm")
         assert "#13562" not in capsys.readouterr().err
 
     def test_overwrites_existing_file(self, squid_dir, patch_dirs, monkeypatch):
         """Existing working-state.md is overwritten with new content."""
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
         ws = squid_dir / "skill" / "working-state.md"
         ws.write_text("old content", encoding="utf-8")
 
@@ -1933,7 +1927,7 @@ class TestDoWorkingStateUpdate:
     def test_creates_parent_directories(self, squid_dir, patch_dirs, monkeypatch):
         """Parent directories are created if they don't exist."""
         new_role_dir = squid_dir / "newrole"
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        monkeypatch.setattr(cycle_post, "_squid_path", lambda rel: squid_dir / rel)
 
         cycle_post._do_working_state_update(
             {"working_state_update": "content"}, "newrole"
@@ -1969,7 +1963,6 @@ class TestStateCommitAfterCodeCommit:
         monkeypatch.setattr(cycle_post, "_run", fake_run)
         monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
         monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
-        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
 
         data = {
             "cycle_type": "active",
@@ -2019,7 +2012,6 @@ class TestStateCommitAfterCodeCommit:
         monkeypatch.setattr(cycle_post, "_run", fake_run)
         monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
         monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
-        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
 
         data = {
             "cycle_type": "active",
@@ -2040,75 +2032,20 @@ class TestStateCommitAfterCodeCommit:
             f"Expected commit-push fallback, got: {[c for c in calls if c[0] == 'script']}"
         )
 
-    def test_worktree_state_commit_runs_at_end(self, monkeypatch):
-        """When worktree exists, _state_commit is called after main commit."""
-        state_commit_calls = []
-
-        def fake_run(cmd, **kwargs):
-            r = MagicMock()
-            r.returncode = 0
-            r.stdout = "main\n"
-            r.stderr = ""
-            return r
-
-        def fake_state_commit(msg, role="unknown"):
-            state_commit_calls.append((msg, role))
-            return True
-
-        monkeypatch.setattr(cycle_post, "_run", fake_run)
+    def test_no_state_branch_commit_path(self, monkeypatch):
+        """#14144: the state-branch worktree commit is retired -- a cycle's
+        commit path only touches the working branch."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run",
+                            lambda cmd, **kw: calls.append(cmd) or MagicMock(returncode=0, stdout="main\n", stderr=""))
         monkeypatch.setattr(cycle_post, "_run_script",
-                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+                            lambda *a, **kw: calls.append(a) or MagicMock(returncode=0, stdout="", stderr=""))
         monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
-        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: True)
-        monkeypatch.setattr(cycle_post, "_state_commit", fake_state_commit)
-
-        data = {
-            "cycle_type": "active",
-            "cycle_number": 200,
-            "commit_message": "test",
-            "config": {"branch_workflow": True},
-            "code_commit": {
-                "branch": "squidsquad/task/99",
-                "message": "fix bug",
-            },
-        }
-        cycle_post._do_commit_push(data, "skill")
-
-        assert len(state_commit_calls) == 1
-        assert "cycle 200 state" in state_commit_calls[0][0]
-        assert state_commit_calls[0][1] == "skill"
-
-    def test_worktree_state_commit_with_default_path(self, monkeypatch):
-        """Worktree commit runs for non-branch-workflow roles too."""
-        state_commit_calls = []
-
-        def fake_run(cmd, **kwargs):
-            r = MagicMock()
-            r.returncode = 0
-            r.stdout = "main\n"
-            r.stderr = ""
-            return r
-
-        def fake_state_commit(msg, role="unknown"):
-            state_commit_calls.append((msg, role))
-            return True
-
-        monkeypatch.setattr(cycle_post, "_run", fake_run)
-        monkeypatch.setattr(cycle_post, "_run_script",
-                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
-        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
-        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: True)
-        monkeypatch.setattr(cycle_post, "_state_commit", fake_state_commit)
-
-        data = {
-            "cycle_type": "active",
-            "cycle_number": 300,
-            "commit_message": "pm cycle",
-        }
-        cycle_post._do_commit_push(data, "pm")
-
-        assert len(state_commit_calls) == 1
-        assert "cycle 300 state" in state_commit_calls[0][0]
+        cycle_post._do_commit_push({"cycle_type": "active", "cycle_number": 300,
+                                    "commit_message": "pm cycle"}, "pm")
+        assert not hasattr(cycle_post, "_state_commit")
+        assert not hasattr(cycle_post, "_worktree_exists")
+        assert not any("squid-squad" in " ".join(map(str, c)) for c in calls)
 
 
 # ---------------------------------------------------------------------------
@@ -2299,7 +2236,6 @@ class TestCommitPushDmArmPreCheckout:
         monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
         monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "develop")
         monkeypatch.setattr(cycle_post, "_check_disposable_files", lambda: None)
-        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
         # _warn_if_role_files_uncommitted runs git status; stub to silent.
         monkeypatch.setattr(cycle_post, "_warn_if_role_files_uncommitted",
                             lambda role, label: None)
@@ -2349,7 +2285,6 @@ class TestCommitPushDmArmPreCheckout:
                             lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
         monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "develop")
         monkeypatch.setattr(cycle_post, "_check_disposable_files", lambda: None)
-        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
         monkeypatch.setattr(cycle_post, "_warn_if_role_files_uncommitted",
                             lambda role, label: None)
 

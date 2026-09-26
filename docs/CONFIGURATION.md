@@ -96,14 +96,12 @@ How the squad runs your tests.
 ```
 ## Git Branches
 - **Working Branch**: main
-- **State Branch**: squid-squad
 - **Branch Pattern**: squidsquad/task/{number}
 ```
 
 | Field | What it controls |
 |---|---|
 | `Working Branch` | The branch finished work lands on (usually `main`). |
-| `State Branch` | The branch that holds squad operational state, kept separate from code. |
 | `Branch Pattern` | The naming template for per-task feature branches; `{number}` is the issue number. |
 | `Git Protocol` block | Plain-language reminders (pull before work, push after each unit, append-only discussion). Informational. |
 

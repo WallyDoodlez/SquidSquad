@@ -1553,8 +1553,8 @@ class TestUpgradeInstall:
         from pathlib import Path
         squid = tmp_path / ".squidsquad"
         _make_old_install(squid)
-        state_path = squid / ".harness-state.json"
-        state_path.write_text("{}", encoding="utf-8")
+        harness_state_file = squid / ".harness-state.json"
+        harness_state_file.write_text("{}", encoding="utf-8")
 
         # Patch Path.read_text so that reading .harness-state.json raises OSError
         original_read_text = Path.read_text
