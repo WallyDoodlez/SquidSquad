@@ -2544,6 +2544,37 @@ def _distribute_port_to_clones(port) -> int | None:
     return len(clone_paths)
 
 
+def _distribute_local_config_to_clones() -> list | None:
+    """Re-sync every agent clone's ``.local-config`` from this harness's copy.
+
+    #14095: each clone's ``.local-config`` used to be a write-once snapshot, so
+    renamed or relocated clones left sibling copies stale (pm/dm resolving to
+    the qa clone itself, skill pointing at a deleted directory), which is what
+    made ``health_check.py`` report false ``unknown`` readings. The harness's
+    own copy is authoritative: it is what the harness spawns agents from, so a
+    wrong entry there would already have failed the spawn. At every harness
+    boot each clone gets that map re-rendered relative to its own root.
+
+    Production-only, same guard and reason as ``_distribute_port_to_clones``
+    (#13352): an isolated test harness must never write into live clones.
+    Returns the rewritten config paths, or ``None`` when skipped.
+    """
+    live_squid = REPO_ROOT / ".squidsquad"
+    try:
+        is_production = SQUIDSQUAD_DIR.resolve() == live_squid.resolve()
+    except OSError:
+        is_production = False
+    if not is_production:
+        _log(
+            "Isolated SQUIDSQUAD_DIR — skipping clone .local-config re-sync "
+            "(#13352: test harnesses must not write into live clones)"
+        )
+        return None
+    clone_paths = boot_remote._parse_local_config()
+    return boot_remote.sync_local_config_to_clones(
+        clone_paths, skip_roots=(REPO_ROOT,))
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -2620,6 +2651,14 @@ async def lifespan(app: FastAPI):
                 _log(f"Port file distributed to {distributed} clone(s)")
         except (SystemExit, Exception) as e:
             _log(f"WARNING: Could not distribute port to clones: {e}")
+
+        # Re-sync each clone's .local-config so sibling copies never drift (#14095)
+        try:
+            rewritten = _distribute_local_config_to_clones()
+            for cfg in rewritten or ():
+                _log(f"Re-synced stale .local-config: {cfg}")
+        except (SystemExit, Exception) as e:
+            _log(f"WARNING: Could not re-sync .local-config to clones: {e}")
 
         event_lifecycle.load()
         activity_detector.start()

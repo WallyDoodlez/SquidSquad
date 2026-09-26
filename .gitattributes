@@ -27,6 +27,12 @@
 .squidsquad/vault/galaxy/*.md merge=union
 .squidsquad/vault/areas/*.md merge=union
 .squidsquad/vault/projects/*.md merge=union
+# Telemetry shards (#13859, VAULT-ARCH 6.3) — append-only per-writer JSONL;
+# union keeps both sides' events on a same-shard merge, dedupe-by-id at read
+# absorbs any duplicated region. Root-tracked so the backstop ships with every
+# clone via normal pull (the wizard's per-clone .telemetry/.gitattributes seed
+# remains for fresh installs of OTHER repos).
+.squidsquad/vault/.telemetry/*.jsonl merge=union
 
 # Ship counter (#12823) — DM-owned transient machine-regenerated value, ours-wins
 # so a stale sibling clone's push can't regress a bump (the ONLY reason config.md

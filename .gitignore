@@ -74,6 +74,13 @@ references/scripts/migrate_*.py.bak
 # noise (#13557) and a restore-guard false positive (#13556).
 .claude/worktrees/
 
+# Wizard-deployed live Skill packages (#14054): install_vault_engine
+# materializes references/skills/ -> .claude/skills/ per clone; the copy is
+# regenerable deployment output (refreshed on upgrade), never versioned --
+# same class as .claude/worktrees/ above. Confirmed never committed in repo
+# history before this entry.
+.claude/skills/
+
 # External-review working artifacts (#14055): review flows may save a diff
 # for a routed reviewer; these are per-run scratch, never versioned. Two
 # committed strays from May hijacked an agentic code-review (exit 0, wrong
