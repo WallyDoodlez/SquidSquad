@@ -1005,8 +1005,12 @@ def _pr_state_scope_violations(pr_number):
     declared = _pr_declared_files(pr_number)
     if declared is None:
         return None
+    # Only the PR's OWN issue's lineage file is exempt; an unparseable head
+    # branch exempts nothing (fail-safe: refuse rather than leak state).
+    issue = _pr_head_issue(pr_number)
     return sorted(f for f in declared
-                  if _is_state_file(f) and not _is_lineage_file(f))
+                  if _is_state_file(f)
+                  and not (issue is not None and _is_lineage_file(f, issue)))
 
 
 def _merge_commit_sha(pr_number):
@@ -1620,7 +1624,25 @@ def _is_plan_body(path):
     return stem.isdigit()
 
 
-def _is_lineage_file(path):
+def _issue_from_branch(branch):
+    """``squidsquad/task/<n>`` -> ``n`` (int); anything else -> ``None``."""
+    prefix = "squidsquad/task/"
+    if not branch or not branch.startswith(prefix):
+        return None
+    tail = branch[len(prefix):].strip()
+    return int(tail) if tail.isdigit() else None
+
+
+def _pr_head_issue(pr_number):
+    """Issue number of a PR's ``squidsquad/task/<n>`` head branch, or ``None``."""
+    res = _run_list(["gh", "pr", "view", str(pr_number), "--json", "headRefName",
+                     "-q", ".headRefName"], check=False)
+    if res.returncode != 0:
+        return None
+    return _issue_from_branch(res.stdout.strip())
+
+
+def _is_lineage_file(path, issue=None):
     """#13860 (VAULT-ARCH 9.3 receipt location rule): an issue's single
     plan/lineage file rides the task branch and ships in the PR diff.
 
@@ -1632,18 +1654,26 @@ def _is_lineage_file(path):
     --diff-base``) requires it IN the diff -- so stripping it would make the
     gate unpassable. Same #11511 safety argument as the plan body: each is a
     per-issue file, never rewritten every cycle, never shared across branches.
-    Bundle ``CONTEXT.md`` and legacy ``FEAT-*-CONTEXT.md`` stay stripped."""
-    if _is_plan_body(path):
-        return True
+    Bundle ``CONTEXT.md`` and legacy ``FEAT-*-CONTEXT.md`` stay stripped.
+
+    ``issue`` scopes the exemption: when given, only THAT issue's lineage file
+    matches, so a PR/branch for issue A can never carry issue B's planning
+    state (#13860 review). The guard and the merge gate always pass it;
+    ``issue=None`` (shape-only) is for callers with no issue context."""
     parts = path.split("/")
     if len(parts) != 4 or parts[0] != ".squidsquad" or parts[2] != "planning":
         return False
     name = parts[3]
-    if name.startswith("CONTEXT-") and name.endswith(".md"):
-        return name[len("CONTEXT-"):-len(".md")].isdigit()
-    if name.endswith("-fix-plan.md"):
-        return name[: -len("-fix-plan.md")].isdigit()
-    return False
+    stem = None
+    for pre, suf in (("", "-body.md"), ("CONTEXT-", ".md"), ("", "-fix-plan.md")):
+        if name.startswith(pre) and name.endswith(suf) and len(name) > len(pre) + len(suf):
+            cand = name[len(pre):len(name) - len(suf)]
+            if cand.isdigit():
+                stem = cand
+                break
+    if stem is None:
+        return False
+    return issue is None or stem == str(issue)
 
 
 def _auto_resolve_state_conflicts():
@@ -2635,6 +2665,8 @@ def guard_staged_state():
     # check=False: a failing `git branch --show-current` (corrupt HEAD, perms)
     # must not raise mid-commit -- empty `current` falls through to fail-open.
     current = _run("git branch --show-current", check=False).stdout.strip()
+    # #13860: only THIS branch's issue's lineage file rides it (scoped exemption).
+    branch_issue = _issue_from_branch(current)
     # Empty current = detached HEAD or no branch -> can't classify; stay out of
     # the way (fail-open). On the working branch, state belongs here -> no-op.
     if not current or current == working:
@@ -2651,7 +2683,7 @@ def guard_staged_state():
         p = raw.strip().strip('"')
         if not p:
             continue
-        if _is_state_file(p) and not _is_lineage_file(p):
+        if _is_state_file(p) and not (branch_issue is not None and _is_lineage_file(p, branch_issue)):
             state_staged.append(p)
     if not state_staged:
         return []

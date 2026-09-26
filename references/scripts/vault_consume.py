@@ -83,28 +83,63 @@ _Who/what the change touches; upgrade or migration notes._
 
 # ---- lineage resolution --------------------------------------------------------
 
-def _planning_dirs(sq_dir):
-    """Every role's planning dir, PM's first (it authors CONTEXT + plan bodies)."""
-    dirs = sorted(p for p in sq_dir.glob("*/planning") if p.is_dir())
-    return sorted(dirs, key=lambda p: p.parent.name != "pm")
+class WorkTree:
+    """Lineage lookups against the working tree (pickup-time: the file may not
+    be committed yet)."""
+
+    def __init__(self, sq_dir=None):
+        self.sq_dir = Path(sq_dir) if sq_dir else SQ_DIR
+
+    def roles(self):
+        return sorted(p.parent.name for p in self.sq_dir.glob("*/planning") if p.is_dir())
+
+    def exists(self, rel):
+        return (self.sq_dir.parent / rel).is_file()
+
+    def read(self, rel):
+        return (self.sq_dir.parent / rel).read_text(encoding="utf-8")
 
 
-def resolve_lineage(n, sq_dir=None):
+class GitTree:
+    """Lineage lookups against a commit (verification-time: the gate judges
+    what the PR actually carries, never uncommitted working-tree edits)."""
+
+    def __init__(self, ref="HEAD", runner=subprocess.run, cwd=None):
+        self.ref, self.runner, self.cwd = ref, runner, cwd or REPO_ROOT
+
+    def _git(self, *args):
+        return self.runner(["git", *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", cwd=str(self.cwd))
+
+    def roles(self):
+        res = self._git("ls-tree", "-d", "--name-only", f"{self.ref}:.squidsquad")
+        return sorted(res.stdout.split()) if res.returncode == 0 else []
+
+    def exists(self, rel):
+        return self._git("cat-file", "-e", f"{self.ref}:{rel}").returncode == 0
+
+    def read(self, rel):
+        return self._git("show", f"{self.ref}:{rel}").stdout
+
+
+def resolve_lineage(n, sq_dir=None, tree=None):
     """Resolve issue <n>'s single canonical lineage file.
 
     Order (first existing wins): per-task ``CONTEXT-<n>.md`` (planned task) ->
     ``<n>-body.md`` plan body (plan-in-PR, #12750) -> ``<n>-fix-plan.md``
-    (bug flow, created at pickup). Returns ``{"path", "kind", "exists"}`` with a
-    repo-relative forward-slash path, or ``None`` if nothing exists yet.
+    (bug flow, created at pickup); PM's planning dir first within each kind.
+    Returns ``{"path", "kind", "exists"}`` with a repo-relative forward-slash
+    path, or ``None`` if nothing exists yet.
     """
-    sq_dir = Path(sq_dir) if sq_dir else SQ_DIR
+    tree = tree or WorkTree(sq_dir)
+    roles = sorted(tree.roles(), key=lambda r: r != "pm")
     for kind, name in (("context", f"CONTEXT-{n}.md"),
                        ("plan-body", f"{n}-body.md"),
                        ("fix-plan", f"{n}-fix-plan.md")):
-        for d in _planning_dirs(sq_dir):
-            p = d / name
-            if p.is_file():
-                return {"path": _rel(p, sq_dir), "kind": kind, "exists": True}
+        for role in roles:
+            rel = f".squidsquad/{role}/planning/{name}"
+            if tree.exists(rel):
+                return {"path": rel, "kind": kind, "exists": True}
     return None
 
 
@@ -178,21 +213,27 @@ def check_section(text, heading):
 
 def _changed_files(base):
     res = subprocess.run(["git", "diff", "--name-only", f"{base}...HEAD"],
-                         capture_output=True, text=True, cwd=str(REPO_ROOT))
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", cwd=str(REPO_ROOT))
     if res.returncode != 0:
         return None
     return set(res.stdout.split())
 
 
-def check_receipts(n, sq_dir=None, diff_base=None, changed_files=None):
+def check_receipts(n, sq_dir=None, diff_base=None, changed_files=None, tree=None):
     """The 9.4 gate. Returns a verdict dict; ``verdict`` is ``pass``,
-    ``pass-with-note`` (engine was unavailable -- 9.9) or ``fail``."""
-    sq_dir = Path(sq_dir) if sq_dir else SQ_DIR
-    lineage = resolve_lineage(n, sq_dir)
+    ``pass-with-note`` (engine was unavailable -- 9.9) or ``fail``.
+
+    With ``diff_base`` (the verifier's form) the lineage file is resolved and
+    read from the COMMITTED tree (HEAD), so an uncommitted working-tree fix
+    can never pass a PR whose committed receipts are broken."""
+    if tree is None:
+        tree = GitTree("HEAD") if diff_base is not None else WorkTree(sq_dir)
+    lineage = resolve_lineage(n, tree=tree)
     if lineage is None:
         return {"verdict": "fail", "issue": n, "lineage": None,
                 "problems": [f"no lineage file for #{n} (CONTEXT-{n}.md, {n}-body.md or {n}-fix-plan.md)"]}
-    text = (sq_dir.parent / lineage["path"]).read_text(encoding="utf-8")
+    text = tree.read(lineage["path"])
     sections, problems, notes = {}, [], []
     for heading in RECEIPT_SECTIONS:
         status, detail = check_section(text, heading)
@@ -242,7 +283,7 @@ def run_engine(script_name, args, runner=subprocess.run):
         return None, f"engine script {script_name} not installed"
     try:
         proc = runner([node, str(script), *args], capture_output=True, text=True,
-                      cwd=str(REPO_ROOT), timeout=120)
+                      encoding="utf-8", errors="replace", cwd=str(REPO_ROOT), timeout=120)
     except (OSError, subprocess.TimeoutExpired) as e:
         return None, f"engine failed to run: {e}"
     if proc.returncode != 0:

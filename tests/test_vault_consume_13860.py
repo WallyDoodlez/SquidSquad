@@ -151,9 +151,10 @@ class TestCheckReceipts:
     def test_lineage_must_be_in_diff(self, sq):
         write(sq, "skill/planning/9-fix-plan.md", GOOD)
         path = ".squidsquad/skill/planning/9-fix-plan.md"
-        assert vc.check_receipts(9, sq, diff_base="origin/main",
+        tree = vc.WorkTree(sq)
+        assert vc.check_receipts(9, diff_base="origin/main", tree=tree,
                                  changed_files={path, "a.py"})["verdict"] == "pass"
-        res = vc.check_receipts(9, sq, diff_base="origin/main", changed_files={"a.py"})
+        res = vc.check_receipts(9, diff_base="origin/main", tree=tree, changed_files={"a.py"})
         assert res["verdict"] == "fail" and "not in the PR diff" in res["problems"][0]
 
     def test_cli_exit_codes(self, sq, monkeypatch, capsys):
@@ -163,6 +164,41 @@ class TestCheckReceipts:
         write(sq, "skill/planning/9-fix-plan.md", GOOD)
         assert vc.main(["check-receipts", "9"]) == 0
         assert json.loads(capsys.readouterr().out)["verdict"] == "pass"
+
+
+class TestGateReadsCommittedTree:
+    """With --diff-base the gate judges the COMMITTED lineage file (review
+    finding on commit 2): an uncommitted working-tree fix must not pass."""
+
+    @pytest.fixture
+    def repo(self, tmp_path):
+        def git(*a):
+            subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)
+        git("init", "-q")
+        git("config", "user.email", "t@t")
+        git("config", "user.name", "t")
+        write(tmp_path / ".squidsquad", "skill/planning/9-fix-plan.md",
+              "## Vault context consumed\n\n## Applicable rules\n")
+        git("add", "-A")
+        git("commit", "-q", "-m", "bad receipts")
+        return tmp_path
+
+    def test_uncommitted_fix_does_not_pass(self, repo):
+        write(repo / ".squidsquad", "skill/planning/9-fix-plan.md", GOOD)  # dirty, uncommitted
+        path = ".squidsquad/skill/planning/9-fix-plan.md"
+        res = vc.check_receipts(9, diff_base="base", changed_files={path},
+                                tree=vc.GitTree("HEAD", cwd=repo))
+        assert res["verdict"] == "fail"
+        # the same content passes once committed
+        subprocess.run(["git", "commit", "-qam", "fix"], cwd=repo, check=True, capture_output=True)
+        res = vc.check_receipts(9, diff_base="base", changed_files={path},
+                                tree=vc.GitTree("HEAD", cwd=repo))
+        assert res["verdict"] == "pass"
+
+    def test_uncommitted_lineage_file_is_not_found(self, repo):
+        write(repo / ".squidsquad", "pm/planning/CONTEXT-9.md", GOOD)  # untracked
+        res = vc.resolve_lineage(9, tree=vc.GitTree("HEAD", cwd=repo))
+        assert res["kind"] == "fix-plan"
 
 
 class TestEngineDegradation:
@@ -240,6 +276,7 @@ class TestLineageGuardExemption:
     def test_guard_keeps_fix_plan_strips_state(self):
         staged = [".squidsquad/skill/planning/13860-fix-plan.md",
                   ".squidsquad/pm/planning/CONTEXT-13860.md",
+                  ".squidsquad/pm/planning/CONTEXT-777.md",  # another issue's: stripped
                   ".squidsquad/skill/working-state.md"]
         resets = []
 
@@ -257,14 +294,34 @@ class TestLineageGuardExemption:
                 patch.object(git_ops, "_run", return_value=MagicMock(stdout="squidsquad/task/13860\n", returncode=0)), \
                 patch.object(git_ops, "_run_list", side_effect=fake_run_list):
             unstaged = git_ops.guard_staged_state()
-        assert unstaged == [".squidsquad/skill/working-state.md"]
-        assert resets == [".squidsquad/skill/working-state.md"]
+        assert unstaged == [".squidsquad/pm/planning/CONTEXT-777.md", ".squidsquad/skill/working-state.md"]
+        assert resets == unstaged
 
     def test_merge_gate_allows_lineage_in_pr(self):
         declared = [".squidsquad/skill/planning/13860-fix-plan.md",
                     ".squidsquad/skill/working-state.md", "a.py"]
-        with patch.object(git_ops, "_pr_declared_files", return_value=declared):
+        with patch.object(git_ops, "_pr_declared_files", return_value=declared), patch.object(git_ops, "_pr_head_issue", return_value=13860):
             assert git_ops._pr_state_scope_violations(1) == [".squidsquad/skill/working-state.md"]
+
+    def test_merge_gate_refuses_other_issues_lineage(self):
+        declared = [".squidsquad/skill/planning/777-fix-plan.md", "a.py"]
+        with patch.object(git_ops, "_pr_declared_files", return_value=declared), patch.object(git_ops, "_pr_head_issue", return_value=13860):
+            assert git_ops._pr_state_scope_violations(1) == [".squidsquad/skill/planning/777-fix-plan.md"]
+
+    @pytest.mark.parametrize("path,issue,expected", [
+        (".squidsquad/skill/planning/13860-fix-plan.md", 13860, True),
+        (".squidsquad/skill/planning/13860-fix-plan.md", 777, False),
+        (".squidsquad/pm/planning/CONTEXT-777.md", 13860, False),
+        (".squidsquad/pm/planning/777-body.md", None, True),  # shape-only form
+    ])
+    def test_issue_scoping(self, path, issue, expected):
+        assert git_ops._is_lineage_file(path, issue) is expected
+
+    def test_issue_from_branch(self):
+        assert git_ops._issue_from_branch("squidsquad/task/13860") == 13860
+        assert git_ops._issue_from_branch("squidsquad/task/abc") is None
+        assert git_ops._issue_from_branch("feature/x") is None
+        assert git_ops._issue_from_branch("") is None
 
 
 class TestIntakeInjection:

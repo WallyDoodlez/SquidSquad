@@ -991,8 +991,11 @@ class TestPrStateScopeViolations13554:
     predicate) + the _is_plan_body/launcher exemptions to flag main-only paths a
     PR must never carry. Kept OUT of TestPrMerge (whose fixture patches it)."""
 
-    def _violations(self, declared):
-        with patch("git_ops._pr_declared_files", return_value=declared):
+    def _violations(self, declared, head_issue=13554):
+        # #13860: the lineage exemption is scoped to the PR's own issue (head
+        # branch squidsquad/task/<n>); mock the head lookup -- never live gh.
+        with (patch("git_ops._pr_declared_files", return_value=declared),
+              patch("git_ops._pr_head_issue", return_value=head_issue)):
             return git_ops._pr_state_scope_violations(1)
 
     def test_state_and_vault_paths_flagged(self):
@@ -1015,6 +1018,15 @@ class TestPrStateScopeViolations13554:
     def test_plan_body_exempt(self):
         # A PM plan body legitimately rides the branch (#12750) — not a violation.
         assert self._violations({".squidsquad/pm/planning/13554-body.md"}) == []
+
+    def test_other_issues_plan_body_flagged(self):
+        # #13860: a PR may carry only its OWN issue's lineage file.
+        assert self._violations({".squidsquad/pm/planning/999-body.md"}) == [
+            ".squidsquad/pm/planning/999-body.md"]
+
+    def test_unparseable_head_exempts_nothing(self):
+        assert self._violations({".squidsquad/pm/planning/13554-body.md"},
+                                head_issue=None) == [".squidsquad/pm/planning/13554-body.md"]
 
     def test_launcher_scripts_exempt(self):
         # start.sh/start.ps1 are versioned code deliverables (#13318), not state.
