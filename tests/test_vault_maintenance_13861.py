@@ -245,6 +245,12 @@ def _opt(args, flag):
     return args[args.index(flag) + 1]
 
 
+@pytest.fixture(autouse=True)
+def _tmp_ledger(tmp_path, monkeypatch):
+    """Never touch the live clone's HITL ledger."""
+    monkeypatch.setattr(vault_optimize, "HITL_LEDGER_FILE", tmp_path / ".vault-hitl-ledger.json")
+
+
 class TestFileContradiction:
     def test_files_pending_pm_task_with_sorted_pair_title(self, monkeypatch):
         forge = _Forge()
@@ -274,6 +280,35 @@ class TestFileContradiction:
         monkeypatch.setattr(vault_optimize, "_tracker", forge)
         out = vault_optimize.file_contradiction("rule-z", "decision-café", "t", "x", "y", "pm")
         assert out["filed"] is False and forge.created == []
+
+    def test_back_to_back_refile_deduped_despite_lagging_forge_list(self, monkeypatch):
+        """Verifier TC6: the forge list lags creation, so the second call sees
+        no open task -- the ledger must still catch it."""
+        forge = _Forge()  # list never shows the created task (lag)
+        monkeypatch.setattr(vault_optimize, "_tracker", forge)
+        first = vault_optimize.file_contradiction("a", "b", "t", "x", "y", "pm")
+        second = vault_optimize.file_contradiction("b", "a", "t2", "y", "x", "pm")
+        assert first["filed"] and second["filed"] is False and second["duplicate"]
+        assert "#4242" in second["reason"] and len(forge.created) == 1
+
+    def test_ledger_expires_so_closed_contradiction_can_refile(self, monkeypatch):
+        forge = _Forge()
+        monkeypatch.setattr(vault_optimize, "_tracker", forge)
+        vault_optimize.file_contradiction("a", "b", "t", "x", "y", "pm")
+        real = vault_optimize.time.time
+        monkeypatch.setattr(vault_optimize.time, "time",
+                            lambda: real() + vault_optimize.HITL_LEDGER_TTL + 1)
+        assert vault_optimize.file_contradiction("a", "b", "t", "x", "y", "pm")["filed"]
+        assert len(forge.created) == 2
+
+    def test_prune_review_back_to_back_deduped(self, monkeypatch):
+        forge = _Forge()
+        monkeypatch.setattr(vault_optimize, "_tracker", forge)
+        monkeypatch.setattr(vault_optimize, "propose_prunes",
+                            lambda stale_days=90: TestFilePruneReview.PROPOSALS)
+        assert vault_optimize.file_prune_review("pm")["filed"]
+        assert vault_optimize.file_prune_review("pm")["duplicate"]
+        assert len(forge.created) == 1
 
     def test_forge_read_failure_refuses_to_file_blind(self, monkeypatch):
         forge = _Forge(list_rc=1)
@@ -439,6 +474,8 @@ class TestMaintenanceWindow:
         lines = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
         assert ".squidsquad/.vault-maintenance.json" in lines
         assert ".squidsquad/.vault-maintenance.json.tmp" in lines
+        assert ".squidsquad/.vault-hitl-ledger.json" in lines
+        assert vault_optimize.HITL_LEDGER_FILE.name == ".vault-hitl-ledger.json"
 
 
 class TestConsumerWiring:
@@ -452,6 +489,7 @@ class TestConsumerWiring:
                 / "event-mode-contract.md").read_text(encoding="utf-8")
         line = next(l for l in text.splitlines() if l.startswith("- **`vault-maintenance`**"))
         assert "vault-optimize" in line and "ack-cursor" in line
+        assert "Only pm acts on it" in line and "any other alias" in line
 
     def test_sub_skill_uses_the_deterministic_filers(self):
         text = (REPO / "references" / "sub-skills" / "common"

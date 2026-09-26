@@ -436,18 +436,65 @@ def _open_pm_task_titles():
         return None
 
 
-def _file_pm_task(title, body, reporter, titles=None):
+# The forge's issue listing lags creation by seconds (verifier TC6 on #13861:
+# back-to-back files of one pair both landed at +3s/+6s). Every successful
+# filing is recorded here first-hand and consulted before the forge list, so
+# a re-file inside the lag window is caught; the TTL comfortably outlasts the
+# lag while still letting a contradiction re-file after its task is closed.
+HITL_LEDGER_FILE = REPO_ROOT / ".squidsquad" / ".vault-hitl-ledger.json"
+HITL_LEDGER_TTL = 3600  # seconds
+
+
+def _read_ledger(now):
+    try:
+        data = json.loads(HITL_LEDGER_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {t: e for t, e in data.items()
+            if isinstance(e, dict) and now - e.get("at", 0) < HITL_LEDGER_TTL}
+
+
+def _record_filed(title, number, now):
+    ledger = _read_ledger(now)
+    ledger[title] = {"number": number, "at": now}
+    try:
+        HITL_LEDGER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = HITL_LEDGER_FILE.with_name(HITL_LEDGER_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
+        tmp.replace(HITL_LEDGER_FILE)
+    except OSError:
+        pass  # the forge list still dedupes once it catches up
+
+
+def _already_filed(match, titles, now):
+    """(True, reason) when a recent ledger entry or an open forge task
+    matches. ``match`` is applied to the ASCII-transliterated title form
+    tracker.create_task stores (#13517)."""
+    for t, e in _read_ledger(now).items():
+        if match(t):
+            return True, f"filed moments ago as #{e.get('number')} (ledger)"
+    if any(match(t.removeprefix("TASK:").strip()) for t in titles):
+        return True, "open task already exists"
+    return False, ""
+
+
+def _file_pm_task(title, body, reporter, titles=None, match=None):
     """File a ``pending`` pm task -- the human approval gate IS the HITL gate
-    (never auto-applied). Dedup by exact title among open pm tasks."""
+    (never auto-applied). Dedup: recent-filing ledger, then open pm tasks
+    (exact title unless ``match`` is given)."""
+    from tracker import _asciiize_title
+    now = time.time()
+    stored = _asciiize_title(title)
+    match = match or (lambda t: t == stored)
     if titles is None:
         titles = _open_pm_task_titles()
     if titles is None:
         return {"filed": False, "reason": "forge read failed -- not filing blind"}
-    # tracker.create_task stores an ASCII-transliterated title (#13517);
-    # compare in that form so a non-ASCII slug still dedupes.
-    from tracker import _asciiize_title
-    if any(t.removeprefix("TASK:").strip() == _asciiize_title(title) for t in titles):
-        return {"filed": False, "reason": "open task already exists", "title": title}
+    dup, reason = _already_filed(match, titles, now)
+    if dup:
+        return {"filed": False, "duplicate": True, "reason": reason, "title": title}
     rc, out = _tracker("create-task", "--title", title, "--body", body,
                        "--role", "pm", "--priority", "low", "--reporter", reporter)
     if rc != 0:
@@ -459,6 +506,7 @@ def _file_pm_task(title, body, reporter, titles=None):
             break
         except (ValueError, AttributeError):
             continue
+    _record_filed(stored, number, now)
     return {"filed": True, "number": number, "title": title}
 
 
@@ -489,13 +537,7 @@ def file_prune_review(reporter, stale_days=90):
     proposals = result.get("proposals", [])
     if not proposals:
         return {"filed": False, "reason": "no proposals"}
-    titles = _open_pm_task_titles()
-    if titles is None:
-        return {"filed": False, "reason": "forge read failed -- not filing blind"}
-    if any(t.removeprefix("TASK:").strip().startswith(PRUNE_REVIEW_TITLE_PREFIX)
-           for t in titles):
-        return {"filed": False, "reason": "open pruning review already exists"}
-    rows = "\n".join(f"- [[{p['slug']}]] -- {p['bucket']} -> {p['action']} ({p['evidence']})"
+    rows ="\n".join(f"- [[{p['slug']}]] -- {p['bucket']} -> {p['action']} ({p['evidence']})"
                      for p in proposals)
     body = (
         f"Usage-based pruning proposals from the impressions report "
@@ -503,8 +545,9 @@ def file_prune_review(reporter, stale_days=90):
         f"was archived. On approval, retire by setting `status: archived` in "
         f"place; never move or delete the file.\n\n{rows}"
     )
+    # One open review at a time, whatever its count: match on the prefix.
     return _file_pm_task(f"{PRUNE_REVIEW_TITLE_PREFIX} {len(proposals)} notes", body,
-                         reporter, titles=titles)
+                         reporter, match=lambda t: t.startswith(PRUNE_REVIEW_TITLE_PREFIX))
 
 
 def prune(dry_run=False):
@@ -1020,7 +1063,7 @@ def main():
         result = file_contradiction(opts["slug-a"], opts["slug-b"], opts["topic"],
                                     opts["statement-a"], opts["statement-b"], opts["reporter"])
         print(json.dumps(result, indent=2))
-        return 0 if result["filed"] or "already exists" in result.get("reason", "") else 1
+        return 0 if result["filed"] or result.get("duplicate") else 1
     elif cmd == "file-prune-review":
         reporter = _str_opt(args, "--reporter")
         if not reporter:

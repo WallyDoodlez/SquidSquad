@@ -4,6 +4,8 @@
 .squidsquad/.instance-id.tmp
 .squidsquad/.vault-maintenance.json
 .squidsquad/.vault-maintenance.json.tmp
+.squidsquad/.vault-hitl-ledger.json
+.squidsquad/.vault-hitl-ledger.json.tmp
 .squidsquad/*/current-state
 .squidsquad/*/.pid
 .squidsquad/*/.claude-pid
