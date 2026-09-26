@@ -10,6 +10,8 @@ Usage:
     python scripts/vault_optimize.py consolidate-scan [--dry-run]  # Detect merge candidates
     python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
     python scripts/vault_optimize.py reindex                       # Rebuild links index
+    python scripts/vault_optimize.py propose-prunes [--stale-days N]  # #13859: engine-report-driven prune PROPOSALS (never auto-applied)
+    python scripts/vault_optimize.py compact-telemetry --alias <alias> [--horizon-days N]  # #13859 S3.4: compact own shard via the engine (owner-only)
     python scripts/vault_optimize.py relevance-report              # Update relevance scores
     python scripts/vault_optimize.py pending-count                 # Count pending questions
     python scripts/vault_optimize.py add-question --agent <r> --note <path> --question <q>
@@ -188,6 +190,131 @@ def _extract_keywords(text):
 # ---------------------------------------------------------------------------
 # Prune — auto-archive stale+orphan galaxy notes
 # ---------------------------------------------------------------------------
+
+ENGINE_REPORT = (Path(__file__).resolve().parent.parent
+                 / "skills" / "vault-search" / "scripts"
+                 / "vault-impressions-report.mjs")
+
+
+def propose_prunes(stale_days=90):
+    """#13859 (S3.3 consumption AC, VAULT-ARCH 7.3/6.4): run the ENGINE's
+    impressions report and turn its buckets into prune/archival PROPOSALS.
+
+    The report is the purge signal -- usage-based staleness (4.4), never time
+    decay. This function proposes only: output is a JSON proposal list for
+    PM's improvement scan / human triage; nothing is archived or deleted here
+    (contradiction-class actions stay human-gated, 7.3). The shard read lives
+    entirely behind the engine boundary (8.5) -- this script invokes the
+    packaged reporter; the shard store is never opened from Python. Engine unavailable
+    (node missing, script error) degrades to an honest empty proposal set
+    with a reason (9.9), never an exception.
+
+    Returns the proposal dict (also printed as JSON by the CLI wrapper).
+    """
+    import shutil as _shutil
+    node = _shutil.which("node")
+    if node is None or not ENGINE_REPORT.is_file():
+        reason = "node unavailable" if node is None else "engine report script missing"
+        return {"proposals": [], "engineUnavailable": True, "reason": reason}
+    proc = subprocess.run(
+        [node, str(ENGINE_REPORT), "--vault", str(VAULT_DIR),
+         "--stale-days", str(stale_days)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        return {"proposals": [], "engineUnavailable": True,
+                "reason": f"report exited {proc.returncode}: {(proc.stderr or '').strip()[:200]}"}
+    try:
+        report = json.loads(proc.stdout)
+    except ValueError as e:
+        return {"proposals": [], "engineUnavailable": True,
+                "reason": f"report output unparseable: {e}"}
+
+    proposals = []
+    for row in report.get("rows", []):
+        if row.get("status") in ("archived", "superseded"):
+            continue  # already retired -- nothing to propose
+        if row.get("stale"):
+            proposals.append({"slug": row["slug"], "path": row["path"],
+                              "action": "archive", "bucket": "stale",
+                              "evidence": f"used {row['used']}x, last {row['lastUsed']}"})
+        elif row.get("surfacedNeverUsed"):
+            proposals.append({"slug": row["slug"], "path": row["path"],
+                              "action": "review", "bucket": "surfaced-never-used",
+                              "evidence": f"offered {row['impression']}+{row['walked']}x, never cited"})
+        elif row.get("cold"):
+            proposals.append({"slug": row["slug"], "path": row["path"],
+                              "action": "review", "bucket": "cold",
+                              "evidence": "never surfaced by any search"})
+    return {"proposals": proposals, "engineUnavailable": False,
+            "counts": report.get("counts", {}), "staleDays": stale_days}
+
+
+ENGINE_COMPACT = (Path(__file__).resolve().parent.parent
+                  / "skills" / "vault-search" / "scripts"
+                  / "compact-telemetry.mjs")
+INSTANCE_ID_FILE = REPO_ROOT / ".squidsquad" / ".instance-id"
+
+
+def _read_instance_id():
+    """The engine identity contract (vault-search SKILL.md): the harness
+    instance UUID lives in the gitignored .squidsquad/.instance-id; absent
+    means the install predates the mint -- callers pass 'unprovisioned'."""
+    try:
+        val = INSTANCE_ID_FILE.read_text(encoding="utf-8").strip()
+        return val or "unprovisioned"
+    except OSError:
+        return "unprovisioned"
+
+
+def compact_telemetry(alias, horizon_days=30):
+    """#13859 (S3.4, VAULT-ARCH 6.5): quiet-cycle compaction of THIS writer's
+    own telemetry shard, via the engine's compaction tool.
+
+    Owner-only is structural on both sides: the alias is an explicit caller
+    argument (never guessed from the environment -- a wrong identity would
+    compact another writer's shard), and the engine tool itself refuses to run
+    without one. The shard store stays behind the engine boundary (8.5) --
+    Python invokes the packaged tool and relays its JSON; the aggregate and
+    shard writes (invariant 2 ordering) happen engine-side, and the caller's
+    normal cycle commit picks BOTH files up as one commit. Engine unavailable
+    degrades to an honest skip with a reason (9.9), never an exception.
+    """
+    import shutil as _shutil
+    node = _shutil.which("node")
+    if node is None or not ENGINE_COMPACT.is_file():
+        reason = "node unavailable" if node is None else "engine compact script missing"
+        return {"skipped": True, "engineUnavailable": True, "reason": reason}
+    instance_id = _read_instance_id()
+    if instance_id == "unprovisioned":
+        # Truncation is the one destructive telemetry op: under the shared
+        # 'unprovisioned' sentinel, distinct un-minted clones with the same
+        # alias collapse onto ONE shard, so "owner-only" is not actually
+        # satisfied -- this pass could absorb another machine's appends.
+        # Reads/writes tolerate the sentinel; compaction requires a real
+        # minted identity.
+        return {"skipped": True, "engineUnavailable": False,
+                "reason": "instance-id unprovisioned -- owner-only compaction "
+                          "requires a minted identity (wizard mint step)"}
+    proc = subprocess.run(
+        [node, str(ENGINE_COMPACT), "--vault", str(VAULT_DIR),
+         "--instance-id", instance_id, "--alias", alias,
+         "--horizon-days", str(horizon_days)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        return {"skipped": True, "engineUnavailable": True,
+                "reason": f"compact exited {proc.returncode}: {(proc.stderr or '').strip()[:200]}"}
+    try:
+        result = json.loads(proc.stdout)
+    except ValueError as e:
+        return {"skipped": True, "engineUnavailable": True,
+                "reason": f"compact output unparseable: {e}"}
+    result["skipped"] = False
+    return result
+
 
 def prune(dry_run=False):
     """Archive galaxy notes that are both stale (>60 days) and orphaned (no inbound links).
@@ -633,6 +760,36 @@ def main():
         finally:
             _release_lock()
 
+    elif cmd == "propose-prunes":
+        sd = 90
+        if "--stale-days" in args:
+            try:
+                sd = int(args[args.index("--stale-days") + 1])
+            except (ValueError, IndexError):
+                pass
+        result = propose_prunes(stale_days=sd)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
+    elif cmd == "compact-telemetry":
+        alias = None
+        if "--alias" in args:
+            try:
+                alias = args[args.index("--alias") + 1]
+            except IndexError:
+                pass
+        if not alias or alias.startswith("--"):
+            print("Usage: vault_optimize.py compact-telemetry --alias <alias> [--horizon-days N]",
+                  file=sys.stderr)
+            return 2
+        hd = 30
+        if "--horizon-days" in args:
+            try:
+                hd = int(args[args.index("--horizon-days") + 1])
+            except (ValueError, IndexError):
+                pass
+        result = compact_telemetry(alias, horizon_days=hd)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
     elif cmd == "relevance-report":
         ok, reason = _check_guards()
         if not ok:
