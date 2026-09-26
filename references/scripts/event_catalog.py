@@ -118,6 +118,14 @@ EMITTED = {
         "source": "harness.py _deploy_recover_and_respawn",
         "payload_fields": ["target_alias", "event_context", "failed_role", "stage", "detail"],
     },
+    # #13861 (PRD-VAULT-V2 S5.1, VAULT-ARCH 9.6): the harness maintenance
+    # window found vault notes due for an optimize analyze pass (last_optimized
+    # missing or >= 14 days old). pm's vault-optimize sub-skill reacts.
+    "vault-maintenance": {
+        "description": "Harness-scheduled vault maintenance window: notes are due for an optimize analyze pass. pm runs the vault-optimize sub-skill (contradictions -> pending HITL tasks, never applied; pruning review; last_optimized stamp).",
+        "source": "harness.py run_vault_maintenance_window",
+        "payload_fields": ["target_alias", "event_context", "total_due", "queued", "cutoff_days"],
+    },
 }
 
 # Tier 2: recognized -planned/expected, referenced by filters but not yet

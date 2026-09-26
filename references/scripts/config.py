@@ -130,6 +130,7 @@ FIELD_MAP = {
     "briefing-token-budget": ("Vault Remember", "BRIEFING Token Budget"),
     "confidence-decay-days": ("Vault Remember", "Confidence Decay Days"),
     "vault-optimize": ("Vault Optimize", "Enabled"),
+    "vault-optimize-interval-hours": ("Vault Optimize", "Interval Hours"),  # #13861 S5.1
     "agent-compose": ("Agent Compose", "Enabled"),
     "auto-merge": ("Auto Merge", "Enabled"),
     "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
@@ -238,6 +239,9 @@ _FIELD_DEFAULTS = {
     # defaults on (matching generate_default_spec) and degrades at runtime
     # per VAULT-ARCH §9.9 rather than a reader ever hard-exiting here.
     "vault-engine": "yes",
+    # #13861 (S5.1) — hours between harness-scheduled vault-optimize analyze
+    # windows; existing config.md files carry no such key.
+    "vault-optimize-interval-hours": "24",
     # #12823 — a fresh install with neither .ship-counter nor a legacy config.md
     # counter field starts the counter at 0.
     "shipped-since-bump": "0",

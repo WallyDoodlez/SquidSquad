@@ -175,7 +175,9 @@ class TestSubSkillRewrites:
         assert vc.check_section(f"{vc.RULES_SECTION}\n- [[rule-a]] -- b\n", vc.RULES_SECTION)[0] == "cited"
 
     def test_optimize_is_propose_only(self):
-        assert "vault_optimize.py propose-prunes" in self.OPTIMIZE
+        # #13861: the report proposals are consumed via file-prune-review
+        # (it calls propose_prunes and files ONE pending review task).
+        assert "vault_optimize.py file-prune-review" in self.OPTIMIZE
         assert "vault_optimize.py compact-telemetry --alias [ROLE]" in self.OPTIMIZE
         # the v1 auto-archive / time-decay path is never invoked
         for cmd in ("vault_optimize.py run\n", "```bash\npython references/scripts/vault_optimize.py run"):
