@@ -16,7 +16,7 @@
   "references/scripts/v2_link_stage.py": "797f2794f6987178385d0ecb3d2b7834e5617210"
  },
  "11512_spec.json": {
-  "references/roles/instructions.md": "a8ffeb9e4b878a5214830f07d4f3db7ef54aff28",
+  "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883",
   "references/scripts/thin_launcher.py": "eec18f4a5032dd1634b121c36f1562403e8dcdf0"
  },
  "11613_spec.json": {},
@@ -66,7 +66,7 @@
  },
  "13035_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
-  "references/roles/instructions.md": "a8ffeb9e4b878a5214830f07d4f3db7ef54aff28"
+  "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883"
  },
  "13043_spec.json": {},
  "13134_spec.json": {
@@ -83,7 +83,7 @@
  },
  "13162_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
-  "references/roles/instructions.md": "a8ffeb9e4b878a5214830f07d4f3db7ef54aff28"
+  "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883"
  },
  "13175_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "07d223fe9a9a0b6757c4908a32b47ee1dbfe25b9"
@@ -135,7 +135,7 @@
   "references/sub-skills/common/vault-remember.md": "54bc6fb99e537560fa8df7e1bc74f0761aa672bd"
  },
  "13565_spec.json": {
-  "references/roles/instructions.md": "a8ffeb9e4b878a5214830f07d4f3db7ef54aff28"
+  "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883"
  },
  "13566_spec.json": {
   "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
