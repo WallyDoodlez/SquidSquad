@@ -251,13 +251,40 @@ class TestTaskBeginCallsSync:
 # reported.
 # ===========================================================================
 
+import shutil  # noqa: E402
 import subprocess  # noqa: E402
+import time  # noqa: E402
 
 
 def _git(cwd, *args, check=True):
     r = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True)
     if check and r.returncode != 0:
-        raise AssertionError(f"git {' '.join(args)} failed in {cwd}: {r.stderr}")
+        # #14136: carry returncode + stdout too -- the flake this guards
+        # against failed with EMPTY stderr, leaving a stderr-only message
+        # with no diagnosis at all.
+        raise AssertionError(
+            f"git {' '.join(args)} failed in {cwd}: rc={r.returncode} "
+            f"stdout={r.stdout!r} stderr={r.stderr!r}"
+        )
+    return r
+
+
+def _git_clone(cwd, *args, attempts=2, delay=0.5):
+    """`git clone <args...> <dest>` with one retry on failure (#14136).
+
+    Under the full static gate with several agent clones running concurrently,
+    a tmp_path `clone --bare` has transiently exited non-zero with empty
+    stderr (Windows file lock / AV scan). The destination is the last arg; a
+    failed attempt's partial destination is removed before retrying, since
+    git refuses to clone into a non-empty directory. The final failure still
+    raises with _git's full diagnostic."""
+    dest = Path(args[-1])
+    for attempt in range(1, attempts + 1):
+        r = _git(cwd, "clone", *args, check=attempt == attempts)
+        if r.returncode == 0:
+            return r
+        shutil.rmtree(dest, ignore_errors=True)
+        time.sleep(delay)
     return r
 
 
@@ -314,9 +341,9 @@ class TestFastForwardStashGuardRealGit13819:
         _commit(seed, "f.txt", base_text, "base")
         _git(seed, "branch", "-M", BRANCH)
         origin = tmp_path / "origin.git"
-        _git(tmp_path, "clone", "--bare", "-q", str(seed), str(origin))
+        _git_clone(tmp_path, "--bare", "-q", str(seed), str(origin))
         local = tmp_path / "local"
-        _git(tmp_path, "clone", "-q", str(origin), str(local))
+        _git_clone(tmp_path, "-q", str(origin), str(local))
         _git(local, "config", "user.email", "t@t.io")
         _git(local, "config", "user.name", "t")
         _git(local, "config", "commit.gpgsign", "false")
@@ -325,7 +352,7 @@ class TestFastForwardStashGuardRealGit13819:
         # Advance origin via a second clone (the "worker pushed a round-2 fix"
         # case #13819 describes) -- touches f.txt's TOP line only.
         pusher = tmp_path / "pusher"
-        _git(tmp_path, "clone", "-q", str(origin), str(pusher))
+        _git_clone(tmp_path, "-q", str(origin), str(pusher))
         _git(pusher, "config", "user.email", "t@t.io")
         _git(pusher, "config", "user.name", "t")
         _git(pusher, "config", "commit.gpgsign", "false")
@@ -359,16 +386,16 @@ class TestFastForwardStashGuardRealGit13819:
         _commit(seed, "f.txt", "base\n", "base")
         _git(seed, "branch", "-M", BRANCH)
         origin = tmp_path / "origin.git"
-        _git(tmp_path, "clone", "--bare", "-q", str(seed), str(origin))
+        _git_clone(tmp_path, "--bare", "-q", str(seed), str(origin))
         local = tmp_path / "local"
-        _git(tmp_path, "clone", "-q", str(origin), str(local))
+        _git_clone(tmp_path, "-q", str(origin), str(local))
         _git(local, "config", "user.email", "t@t.io")
         _git(local, "config", "user.name", "t")
         _git(local, "config", "commit.gpgsign", "false")
         _git(local, "checkout", "-q", BRANCH)
 
         pusher = tmp_path / "pusher"
-        _git(tmp_path, "clone", "-q", str(origin), str(pusher))
+        _git_clone(tmp_path, "-q", str(origin), str(pusher))
         _git(pusher, "config", "user.email", "t@t.io")
         _git(pusher, "config", "user.name", "t")
         _git(pusher, "config", "commit.gpgsign", "false")
@@ -390,3 +417,48 @@ class TestFastForwardStashGuardRealGit13819:
         stash_after = _git(local, "stash", "list").stdout
         assert stash_after == stash_before, \
             "a clean-tree fast-forward must never touch a pre-existing unrelated stash"
+
+
+# ===========================================================================
+# #14136 -- real-git setup helpers: diagnosable failures + one clone retry.
+# ===========================================================================
+
+
+class TestRealGitHelpers14136:
+    def test_git_failure_message_carries_returncode_and_stdout(self, tmp_path):
+        repo = _init_repo(tmp_path / "r")
+        with pytest.raises(AssertionError) as exc:
+            _git(repo, "rev-parse", "--verify", "no-such-ref-14136")
+        msg = str(exc.value)
+        assert "rc=" in msg and "rc=0" not in msg
+        assert "stdout=" in msg and "stderr=" in msg
+
+    def test_clone_retries_once_after_transient_empty_stderr_failure(self, tmp_path):
+        seed = _init_repo(tmp_path / "seed")
+        _commit(seed, "f.txt", "base\n", "base")
+        dest = tmp_path / "origin.git"
+        real_run = subprocess.run
+        clone_calls = []
+
+        def flaky_run(cmd, *a, **kw):
+            if cmd[:2] == ["git", "clone"]:
+                clone_calls.append(cmd)
+                if len(clone_calls) == 1:
+                    # The #14136 signature: non-zero, empty stderr, and a
+                    # partial destination left behind.
+                    dest.mkdir()
+                    (dest / "partial").write_text("x")
+                    return subprocess.CompletedProcess(cmd, 128, "", "")
+            return real_run(cmd, *a, **kw)
+
+        with patch("subprocess.run", side_effect=flaky_run):
+            _git_clone(tmp_path, "--bare", "-q", str(seed), str(dest), delay=0)
+        assert len(clone_calls) == 2
+        assert not (dest / "partial").exists()
+        assert _git(dest, "rev-parse", "HEAD").stdout.strip()
+
+    def test_clone_persistent_failure_raises_with_diagnostic(self, tmp_path):
+        missing = tmp_path / "no-such-seed"
+        with pytest.raises(AssertionError) as exc:
+            _git_clone(tmp_path, "-q", str(missing), str(tmp_path / "d"), delay=0)
+        assert "rc=" in str(exc.value)
