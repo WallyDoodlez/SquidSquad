@@ -1,0 +1,82 @@
+{
+  "issue": 13860,
+  "title": "PRD-VAULT-V2 P4 consumption pipeline - instruction comprehension (S4.1-S4.5)",
+  "files": [
+    "references/sub-skills/roles/worker/implement-tasks.md",
+    "references/sub-skills/roles/worker/triage-issues.md",
+    "references/sub-skills/roles/pm/task-intake-phases.md",
+    "references/sub-skills/roles/verifier/verification-issue-flow.md",
+    "references/sub-skills/roles/verifier/verification.md",
+    "references/sub-skills/common/vault-protocol.md",
+    "references/sub-skills/common/vault-remember.md",
+    "references/sub-skills/common/vault-optimize.md",
+    "references/sub-skills/roles/pm/vault-synthesis.md"
+  ],
+  "questions": [
+    {
+      "id": "1-worker-pickup-consultation",
+      "group": "worker",
+      "question": "A worker picks up an approved task. What vault steps must it perform before implementing, how does it search, and where does the output go?",
+      "expected": "Step 2c: get the lineage file via vault_consume.py lineage-path (create with init-fix-plan if it does not exist); start from the issue body's '## Vault context' section, then run vault_consume.py search (engine wrapper, --alias --task --tags --terms), read relevant hits; append '## Vault context consumed' (wikilink + one-line relevance) and '## Applicable rules' (rules matching via search --types rule) to the lineage file; cite slugs via vault_consume.py cite; check-receipts must exit 0; git add the lineage file explicitly and commit it on the task branch (commit_code does not stage .squidsquad/).",
+      "must_not": "Grep or scan the vault folders; skip the receipt sections."
+    },
+    {
+      "id": "2-worker-none-and-unavailable",
+      "group": "worker",
+      "question": "The consultation search returns nothing relevant, or the engine wrapper exits with code 3. What exactly does the worker write in each case?",
+      "expected": "Nothing relevant: the single line '- None relevant (searched: <keywords>)' (rules: '- None matched (searched rules lane: <keywords>)'). Exit code 3: '- Engine unavailable: <reason>' \u2014 never 'none relevant' when the search did not run.",
+      "must_not": "Write 'none relevant' when the engine was unavailable; substitute a grep."
+    },
+    {
+      "id": "3-bugflow-fixplan",
+      "group": "worker",
+      "question": "In the bug (type:issue) flow, what is created at pickup and what does it contain and where do the vault receipts go?",
+      "expected": "vault_consume.py init-fix-plan creates the issue's lineage file (a lean fix-plan: Root cause / Intended direction / Impact, a few lines each \u2014 the human review surface). The consultation + rules receipts go in this fix-plan, git added on the task branch; check-receipts --diff-base origin/main must exit 0 (fix-plan in the PR diff)."
+    },
+    {
+      "id": "4-pm-intake-injection",
+      "group": "pm-verifier",
+      "question": "After PM files a task issue, what vault step does it run and what does it do? What if it exits non-zero?",
+      "expected": "Run vault_consume.py inject-context <n> --alias <PM_ALIAS> --tags ... --terms ...; it searches the vault (impressions attributed to the issue) and appends a '## Vault context' section (top matches + one-line relevance) to the issue body; re-running replaces the section. Non-zero exit means the body was not updated: fix the cause and re-run; never hand-write the section.",
+      "must_not": "Hand-write the section."
+    },
+    {
+      "id": "5-verifier-receipt-gate",
+      "group": "pm-verifier",
+      "question": "During verification, what is the vault receipt gate and what does the verifier do on fail, pass-with-note, and rule compliance?",
+      "expected": "Run vault_consume.py check-receipts <n> --diff-base origin/main on the checked-out branch. verdict fail -> reject back to dev listing the problems (missing/malformed receipt sections or lineage file not in the PR diff), a zero-gap finding. pass-with-note (engine unavailable at pickup) -> not a reject; quote the note in the verdict. Then read every note cited under '## Applicable rules' and check the diff against each; a violated rule is a reject naming the [[slug]] and the offending change."
+    },
+    {
+      "id": "6-verifier-no-grep",
+      "group": "pm-verifier",
+      "question": "How does the verifier search the vault for its own verification context?",
+      "expected": "Through the engine wrapper: vault_consume.py search --alias <VERIFIER_ALIAS> --task <n> --tags ..., never grep.",
+      "must_not": "Grep the vault."
+    },
+    {
+      "id": "7-vault-search-rule",
+      "group": "vault-skills",
+      "question": "What is the rule for searching the vault, and why?",
+      "expected": "Every vault search goes through the engine (vault_consume.py / engine); never grep, glob or Read-scan the vault folders, because a grep that finds the note leaves no telemetry trail so the note reads as unused and gets proposed for pruning. Exit code 3 = engine unavailable: say so honestly, never substitute a grep and never claim none relevant."
+    },
+    {
+      "id": "8-remember-dedup",
+      "group": "vault-skills",
+      "question": "When capturing a new vault note, how does the dedup gate work? Give the decision rules for update vs create.",
+      "expected": "Gate 2: run vault_consume.py dedup --alias --title --tags --slug (single engine search; the decision is the script's, never overridden by eye). action update with a target path -> add the content to that existing note (vault-update), never create a near-duplicate; action create (no hit passes the merge-target test) -> proceed to Gate 3 to create; exit code 3 (engine unavailable) -> dedup skipped, proceed to Gate 3 and record 'dedup skipped: <reason>' in the iteration log."
+    },
+    {
+      "id": "9-capture-at-ship",
+      "group": "vault-skills",
+      "question": "What is capture-at-ship, who does it, and what constraints apply to the note?",
+      "expected": "Worker, before handing off a task: durable knowledge from the task (decision / root cause / pattern; chores skip) is written on the task branch, cites #<issue>, is new or append-only against the base, and ships in the PR."
+    },
+    {
+      "id": "10-synthesis-output",
+      "group": "vault-skills",
+      "question": "Where does vault synthesis put a detected posture, and what is retired?",
+      "expected": "A principle about one subsystem is appended to that subsystem's systems/ hub under a '## Postures' section; a principle spanning several subsystems becomes a new pattern-<name> note tagged posture + domain tags linking the hubs. The pattern-posture-* prefix is retired. Max 1 per cycle, needs human approval, never auto-approved.",
+      "must_not": "Create pattern-posture-* notes."
+    }
+  ]
+}

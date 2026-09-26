@@ -169,6 +169,17 @@
  "13858_spec.json": {
   "references/sub-skills/common/vault-protocol.md": "d775f2ba26d2768657786225980cae918cd348cf"
  },
+ "13860_spec.json": {
+  "references/sub-skills/common/vault-optimize.md": "4e4e52824d3fcc24379958637f903544a71e6472",
+  "references/sub-skills/common/vault-protocol.md": "d775f2ba26d2768657786225980cae918cd348cf",
+  "references/sub-skills/common/vault-remember.md": "3d23f38de8159be7a877fe4402a4ba8f19db804e",
+  "references/sub-skills/roles/pm/task-intake-phases.md": "3ec466a548131bcc4074e7526d4ec981e56b1807",
+  "references/sub-skills/roles/pm/vault-synthesis.md": "6827aa69351b3cec4849d92c5293611b7c2d7446",
+  "references/sub-skills/roles/verifier/verification-issue-flow.md": "e2ac5ac823209d160f3cae01f129a4bf81d9a6fc",
+  "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432",
+  "references/sub-skills/roles/worker/implement-tasks.md": "4e00a7ec1726e959ebc5bbcf3d86286c8590adef",
+  "references/sub-skills/roles/worker/triage-issues.md": "9e906e464bf3fc214a5f55c7f8f99a14114c32d2"
+ },
  "14099_spec.json": {
   "docs/AGENT-RUNTIME.md": "f68bb00c071daa36a39d916437af00b4cbe38cb9",
   "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883",
