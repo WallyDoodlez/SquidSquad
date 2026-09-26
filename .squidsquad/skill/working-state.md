@@ -1,6 +1,7 @@
 # Working State
 
-- **Task**: #14151 (HUMAN-REQUIRED gate names no label command). Then #14150, #14147.
+- **Task**: #14147 (verifier pending-test scans hardcode the skill alias). Then #14137.
+- #14151: pending-test, PR #14159. #14150: pending-test, PR #14160.
 - #14114: pending-test, PR #14158 (gate PASS 6628, DS r1+r2 fixed; 14099/14109 specs superseded_by 14114; verifier authors 14114_spec).
 - #14127: SHIPPED (PR #14156).
 - #14131 + #14132: SHIPPED (PR #14152). Live proof needs a harness restart.
@@ -9,7 +10,7 @@
 - SHIPPED this session: #14109, #14124, #14125, #13861, #14144.
 
 ## Queue after
-- #14150 (code-review all-inputs-skipped false pass), #14147 (verifier pending-test scans hardcode the skill alias), #14137, #14136, #14133, #14130, #14128. Approved but human-gated: #10690, #10686.
+- #14137, #14136, #14133, #14130, #14128. Approved but human-gated: #10690, #10686.
 
 ## Notes
 - DeepSeek is live again (#14148 closed). Review inputs MUST be inside the repo (e.g. .squidsquad/tmp/review-N/). Paths outside it are silently skipped and come back NO_FINDINGS, which is the #14150 bug.

@@ -139,3 +139,17 @@
 {"id":"ff5fd3bb-e525-4dd6-89f0-b121af4e5a63","ts":"2026-09-26T21:29:36.097Z","agent":"skill","task":14151,"slug":"learning-gh-pr-edit-broken-use-gh-api-patch","counter":"impression"}
 {"id":"7bf51390-ba82-4e8a-bf68-5fb668f8f5fb","ts":"2026-09-26T21:29:36.097Z","agent":"skill","task":14151,"slug":"learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress","counter":"impression"}
 {"id":"762aee41-17a6-46ca-b2cf-1dbb457f03eb","ts":"2026-09-26T21:29:36.097Z","agent":"skill","task":14151,"slug":"learning-raw-pytest-shows-known-failures-use-run-tests-static","counter":"impression"}
+{"id":"f7ef605b-4f69-4433-a7f0-e90ba1a81aa9","ts":"2026-09-26T21:38:09.049Z","agent":"skill","task":14150,"slug":"learning-in-process-handler-daemon-os-exit-kills-test-suite","counter":"impression"}
+{"id":"69e90c5c-187f-4f19-b333-392a398da89f","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-activity-liveness-redispatch-must-not-reset-grace","counter":"impression"}
+{"id":"543dd57b-c49d-4fd0-9811-d0cace39ebf8","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate","counter":"impression"}
+{"id":"979a0eca-07e1-4f77-80dc-b043c859fbee","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-shell-out-provisioning-has-three-sharp-edges","counter":"impression"}
+{"id":"ce2e6a5a-4be0-4072-9abc-8417df2952c5","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"pattern-parallel-axis-audit","counter":"impression"}
+{"id":"f4ddb57b-ed3e-4c78-9aa2-f68ce13d1528","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"impression"}
+{"id":"0fec5069-6c9c-4655-ae4d-138ff4c66ff0","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-default-port-fallback-is-live-egress-trap-in-tests","counter":"impression"}
+{"id":"7b3063f0-48b3-476a-b6a4-e06cd13ad38f","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"agent-communication-layer","counter":"impression"}
+{"id":"a6c57596-4363-411f-ad4e-bdbda7f5fdbf","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"decision-sub-skill-architecture","counter":"impression"}
+{"id":"4fa2d38d-186a-4995-a09f-280527d54c19","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"decision-pid-primary-liveness","counter":"impression"}
+{"id":"ed1fd8cb-887f-4975-af6f-3ae72a328c57","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-raw-pytest-shows-known-failures-use-run-tests-static","counter":"impression"}
+{"id":"c77076df-7c46-42db-a9c9-582cd02e20c4","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-common-events-fragments-are-mode-agnostic","counter":"impression"}
+{"id":"ca051165-1dbe-4041-a594-f62aafce7fd2","ts":"2026-09-26T21:38:25.855Z","agent":"skill","task":14150,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"used"}
+{"id":"6dbd121d-5808-4f80-991b-4b4464bb19bd","ts":"2026-09-26T21:38:25.855Z","agent":"skill","task":14150,"slug":"learning-default-port-fallback-is-live-egress-trap-in-tests","counter":"used"}
