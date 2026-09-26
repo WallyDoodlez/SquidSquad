@@ -49,7 +49,7 @@
  },
  "12800_spec.json": {},
  "12818_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "25907bcad5f3c6394ed45bc50e5aec69fee4c343"
+  ".squidsquad/pm/CLAUDE.md": "9b07422ecbda5b937a07b001e624384054a483ef"
  },
  "12825_spec.json": {
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
@@ -226,8 +226,8 @@
   "tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md": "b4c02ca4eaf7d3f370533052128c2eaea0d4e4af"
  },
  "9184_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "25907bcad5f3c6394ed45bc50e5aec69fee4c343",
-  ".squidsquad/qa/CLAUDE.md": "320553312d403dd75850e3a19929cb13aac7a5f9",
+  ".squidsquad/pm/CLAUDE.md": "9b07422ecbda5b937a07b001e624384054a483ef",
+  ".squidsquad/qa/CLAUDE.md": "b0cbb805b2c8f06f763225c6a80fa446766b309a",
   ".squidsquad/skill/CLAUDE.md": "9971f57a275509e6afa026ab4d6d4f2d9fa042e1",
   "references/sub-skills/roles/pm/task-intake.md": "ab1776529857aab3abf05ad12fd8999426dddd1c"
  },
