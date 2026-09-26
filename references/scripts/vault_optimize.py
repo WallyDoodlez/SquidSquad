@@ -12,6 +12,10 @@ Usage:
     python scripts/vault_optimize.py reindex                       # Rebuild links index
     python scripts/vault_optimize.py propose-prunes [--stale-days N]  # #13859: engine-report-driven prune PROPOSALS (never auto-applied)
     python scripts/vault_optimize.py compact-telemetry --alias <alias> [--horizon-days N]  # #13859 S3.4: compact own shard via the engine (owner-only)
+    python scripts/vault_optimize.py analyze-queue [--cutoff-days 14] [--limit 20]  # #13861: notes due for analyze (last_optimized)
+    python scripts/vault_optimize.py mark-optimized --slugs a,b [--date YYYY-MM-DD]  # #13861: stamp last_optimized after analyze
+    python scripts/vault_optimize.py file-contradiction --slug-a <s> --slug-b <s> --topic <t> --statement-a <x> --statement-b <y> --reporter <alias>  # #13861: HITL task (pending), deduped
+    python scripts/vault_optimize.py file-prune-review --reporter <alias> [--stale-days N]  # #13861: impressions-report proposals -> one HITL task
     python scripts/vault_optimize.py relevance-report              # Update relevance scores
     python scripts/vault_optimize.py pending-count                 # Count pending questions
     python scripts/vault_optimize.py add-question --agent <r> --note <path> --question <q>
@@ -314,6 +318,236 @@ def compact_telemetry(alias, horizon_days=30):
                 "reason": f"compact output unparseable: {e}"}
     result["skipped"] = False
     return result
+
+
+# ---------------------------------------------------------------------------
+# Harness-scheduled analyze (#13861, PRD-VAULT-V2 S5.1, VAULT-ARCH 7.3/9.6)
+# ---------------------------------------------------------------------------
+#
+# The harness maintenance window runs analyze_queue(); a non-empty queue wakes
+# pm, whose vault-optimize sub-skill judges contradictions over the queued
+# notes. Judgment is agent-side; everything around it -- queue selection,
+# HITL filing with dedup, the last_optimized stamp -- is deterministic here.
+
+OPTIMIZE_CUTOFF_DAYS = 14
+ANALYZE_QUEUE_LIMIT = 20
+_RETIRED_STATUSES = ("archived", "superseded")
+CONTRADICTION_TITLE_PREFIX = "Vault contradiction:"
+PRUNE_REVIEW_TITLE_PREFIX = "Vault pruning review:"
+
+
+def analyze_queue(cutoff_days=OPTIMIZE_CUTOFF_DAYS, limit=ANALYZE_QUEUE_LIMIT, today=None):
+    """Notes due for an optimize analyze pass, oldest ``last_optimized`` first.
+
+    Due = active note whose ``last_optimized`` is absent/unparseable or at least
+    ``cutoff_days`` old. Never-optimized notes sort first (then by path, so the
+    order is stable). BRIEFING.md (excluded from the engine, VAULT-ARCH 5), the
+    legacy ``archives/`` folder, and retired statuses are skipped.
+    """
+    today = today or datetime.now().date()
+    due = []
+    for rel, path in sorted(_get_all_notes().items()):
+        if rel == "BRIEFING.md" or rel.startswith("archives/"):
+            continue
+        try:
+            fm = _parse_frontmatter(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        if fm.get("status", "").strip().lower() in _RETIRED_STATUSES:
+            continue
+        raw = fm.get("last_optimized", "").strip().strip("'\"")
+        try:
+            last = datetime.strptime(raw, "%Y-%m-%d").date() if raw else None
+        except ValueError:
+            last = None
+        if last is not None and (today - last).days < cutoff_days:
+            continue
+        due.append({"slug": Path(rel).stem, "path": rel,
+                    "last_optimized": last.isoformat() if last else None})
+    due.sort(key=lambda n: (n["last_optimized"] is not None,
+                            n["last_optimized"] or "", n["path"]))
+    return {"queue": due[:limit], "total_due": len(due),
+            "cutoff_days": cutoff_days, "limit": limit}
+
+
+def _set_frontmatter_field(text, key, value):
+    """Set ``key: value`` in the note's frontmatter (replace or append).
+    Returns None when the note has no frontmatter block."""
+    if not text.startswith("---"):
+        return None
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None
+    head, rest = text[:end], text[end:]
+    # Preserve the note's own line endings (CRLF notes stay CRLF): the
+    # closing "\n---" leaves a trailing "\r" on head for CRLF files.
+    cr = "\r" if head.endswith("\r") else ""
+    pattern = re.compile(rf"^{re.escape(key)}:[^\r\n]*", re.MULTILINE)
+    if pattern.search(head):
+        head = pattern.sub(f"{key}: {value}", head, count=1)
+    else:
+        head = f"{head.rstrip()}{cr}\n{key}: {value}{cr}"
+    return head + rest
+
+
+def mark_optimized(slugs, date=None):
+    """Stamp ``last_optimized`` on each slug's note (TRD 4.3). The ``updated``
+    field is deliberately untouched -- it drives the recency rank (6.2) and an
+    analyze pass is not a content change. Atomic per-note write."""
+    date = date or datetime.now().strftime("%Y-%m-%d")
+    by_slug = {Path(rel).stem: path for rel, path in _get_all_notes().items()}
+    marked, missing = [], []
+    for slug in slugs:
+        path = by_slug.get(slug)
+        new = None
+        if path is not None:
+            with open(path, encoding="utf-8", newline="") as f:  # raw line endings
+                new = _set_frontmatter_field(f.read(), "last_optimized", date)
+        if new is None:
+            missing.append(slug)
+            continue
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(new, encoding="utf-8", newline="")
+        tmp.replace(path)
+        marked.append(slug)
+    return {"marked": marked, "missing": missing, "date": date}
+
+
+def _tracker(*args):
+    """Run tracker.py; returns (returncode, stdout). The single forge egress
+    for this module, so tests stub exactly one seam."""
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "tracker.py"), *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        cwd=str(REPO_ROOT), timeout=120,
+    )
+    return proc.returncode, proc.stdout
+
+
+def _open_pm_task_titles():
+    """Titles of open pm tasks, or None when the forge read failed (callers
+    then refuse to file -- a duplicate HITL task is worse than a late one)."""
+    rc, out = _tracker("list-by-labels", "type:task,role:pm")
+    if rc != 0:
+        return None
+    try:
+        return [i.get("title", "") for i in json.loads(out or "[]")]
+    except ValueError:
+        return None
+
+
+# The forge's issue listing lags creation by seconds (verifier TC6 on #13861:
+# back-to-back files of one pair both landed at +3s/+6s). Every successful
+# filing is recorded here first-hand and consulted before the forge list, so
+# a re-file inside the lag window is caught; the TTL comfortably outlasts the
+# lag while still letting a contradiction re-file after its task is closed.
+HITL_LEDGER_FILE = REPO_ROOT / ".squidsquad" / ".vault-hitl-ledger.json"
+HITL_LEDGER_TTL = 3600  # seconds
+
+
+def _read_ledger(now):
+    try:
+        data = json.loads(HITL_LEDGER_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {t: e for t, e in data.items()
+            if isinstance(e, dict) and now - e.get("at", 0) < HITL_LEDGER_TTL}
+
+
+def _record_filed(title, number, now):
+    ledger = _read_ledger(now)
+    ledger[title] = {"number": number, "at": now}
+    try:
+        HITL_LEDGER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = HITL_LEDGER_FILE.with_name(HITL_LEDGER_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
+        tmp.replace(HITL_LEDGER_FILE)
+    except OSError:
+        pass  # the forge list still dedupes once it catches up
+
+
+def _already_filed(match, titles, now):
+    """(True, reason) when a recent ledger entry or an open forge task
+    matches. ``match`` is applied to the ASCII-transliterated title form
+    tracker.create_task stores (#13517)."""
+    for t, e in _read_ledger(now).items():
+        if match(t):
+            return True, f"filed moments ago as #{e.get('number')} (ledger)"
+    if any(match(t.removeprefix("TASK:").strip()) for t in titles):
+        return True, "open task already exists"
+    return False, ""
+
+
+def _file_pm_task(title, body, reporter, titles=None, match=None):
+    """File a ``pending`` pm task -- the human approval gate IS the HITL gate
+    (never auto-applied). Dedup: recent-filing ledger, then open pm tasks
+    (exact title unless ``match`` is given)."""
+    from tracker import _asciiize_title
+    now = time.time()
+    stored = _asciiize_title(title)
+    match = match or (lambda t: t == stored)
+    if titles is None:
+        titles = _open_pm_task_titles()
+    if titles is None:
+        return {"filed": False, "reason": "forge read failed -- not filing blind"}
+    dup, reason = _already_filed(match, titles, now)
+    if dup:
+        return {"filed": False, "duplicate": True, "reason": reason, "title": title}
+    rc, out = _tracker("create-task", "--title", title, "--body", body,
+                       "--role", "pm", "--priority", "low", "--reporter", reporter)
+    if rc != 0:
+        return {"filed": False, "reason": f"create-task exited {rc}", "title": title}
+    number = None
+    for line in reversed((out or "").strip().splitlines()):
+        try:
+            number = json.loads(line).get("number")
+            break
+        except (ValueError, AttributeError):
+            continue
+    _record_filed(stored, number, now)
+    return {"filed": True, "number": number, "title": title}
+
+
+def file_contradiction(slug_a, slug_b, topic, statement_a, statement_b, reporter):
+    """File one contradiction as a HITL task. Title carries the sorted slug
+    pair so the same contradiction found by two windows files once."""
+    a, b = sorted((slug_a, slug_b))
+    if a == b:
+        return {"filed": False, "reason": "a contradiction needs two distinct notes"}
+    stmt = {slug_a: statement_a, slug_b: statement_b}
+    body = (
+        f"Vault optimize analyze (VAULT-ARCH 9.6) found two active notes that "
+        f"contradict each other on: **{topic}**\n\n"
+        f"- [[{a}]]: {stmt[a]}\n- [[{b}]]: {stmt[b]}\n\n"
+        f"Human decision needed -- nothing has been changed. On approval, resolve "
+        f"by updating one note or retiring it (`status: superseded`/`archived`, "
+        f"flipped in place per vault-protocol)."
+    )
+    return _file_pm_task(f"{CONTRADICTION_TITLE_PREFIX} {a} vs {b}", body, reporter)
+
+
+def file_prune_review(reporter, stale_days=90):
+    """File the impressions-report pruning proposals (6.4) as ONE HITL review
+    task. Engine unavailable or zero proposals files nothing."""
+    result = propose_prunes(stale_days=stale_days)
+    if result.get("engineUnavailable"):
+        return {"filed": False, "reason": f"engine unavailable: {result.get('reason')}"}
+    proposals = result.get("proposals", [])
+    if not proposals:
+        return {"filed": False, "reason": "no proposals"}
+    rows ="\n".join(f"- [[{p['slug']}]] -- {p['bucket']} -> {p['action']} ({p['evidence']})"
+                     for p in proposals)
+    body = (
+        f"Usage-based pruning proposals from the impressions report "
+        f"(VAULT-ARCH 6.4, stale = {stale_days}d). Proposals only -- nothing "
+        f"was archived. On approval, retire by setting `status: archived` in "
+        f"place; never move or delete the file.\n\n{rows}"
+    )
+    # One open review at a time, whatever its count: match on the prefix.
+    return _file_pm_task(f"{PRUNE_REVIEW_TITLE_PREFIX} {len(proposals)} notes", body,
+                         reporter, match=lambda t: t.startswith(PRUNE_REVIEW_TITLE_PREFIX))
 
 
 def prune(dry_run=False):
@@ -692,6 +926,22 @@ def run_optimize(dry_run=False):
 # CLI
 # ---------------------------------------------------------------------------
 
+def _str_opt(args, flag):
+    """Value after ``flag``, or "" when absent / followed by another flag."""
+    if flag in args:
+        i = args.index(flag) + 1
+        if i < len(args) and not args[i].startswith("--"):
+            return args[i]
+    return ""
+
+
+def _int_opt(args, flag, default):
+    try:
+        return int(_str_opt(args, flag))
+    except ValueError:
+        return default
+
+
 def main():
     args = sys.argv[1:]
     if not args or "--help" in args or "-h" in args:
@@ -790,6 +1040,38 @@ def main():
         result = compact_telemetry(alias, horizon_days=hd)
         print(json.dumps(result, indent=2))
         sys.exit(0)
+    elif cmd == "analyze-queue":
+        cd, lim = _int_opt(args, "--cutoff-days", OPTIMIZE_CUTOFF_DAYS), \
+            _int_opt(args, "--limit", ANALYZE_QUEUE_LIMIT)
+        print(json.dumps(analyze_queue(cutoff_days=cd, limit=lim), indent=2))
+    elif cmd == "mark-optimized":
+        slugs = [s for s in _str_opt(args, "--slugs").split(",") if s.strip()]
+        if not slugs:
+            print("Usage: vault_optimize.py mark-optimized --slugs a,b [--date YYYY-MM-DD]",
+                  file=sys.stderr)
+            return 2
+        print(json.dumps(mark_optimized([s.strip() for s in slugs],
+                                        date=_str_opt(args, "--date") or None), indent=2))
+    elif cmd == "file-contradiction":
+        opts = {k: _str_opt(args, f"--{k}") for k in
+                ("slug-a", "slug-b", "topic", "statement-a", "statement-b", "reporter")}
+        if not all(opts.values()):
+            print("Usage: vault_optimize.py file-contradiction --slug-a <s> --slug-b <s> "
+                  "--topic <t> --statement-a <text> --statement-b <text> --reporter <alias>",
+                  file=sys.stderr)
+            return 2
+        result = file_contradiction(opts["slug-a"], opts["slug-b"], opts["topic"],
+                                    opts["statement-a"], opts["statement-b"], opts["reporter"])
+        print(json.dumps(result, indent=2))
+        return 0 if result["filed"] or result.get("duplicate") else 1
+    elif cmd == "file-prune-review":
+        reporter = _str_opt(args, "--reporter")
+        if not reporter:
+            print("Usage: vault_optimize.py file-prune-review --reporter <alias> [--stale-days N]",
+                  file=sys.stderr)
+            return 2
+        print(json.dumps(file_prune_review(reporter, _int_opt(args, "--stale-days", 90)),
+                         indent=2))
     elif cmd == "relevance-report":
         ok, reason = _check_guards()
         if not ok:
