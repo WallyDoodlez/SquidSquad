@@ -459,7 +459,14 @@ export function parseArgs(argv) {
     else if (a === '--entities') entities.push(argv[++i]);
     else if (a === '--tags') tags.push(argv[++i]);
     else if (a === '--terms') terms.push(argv[++i]);
-    else if (a === '--types') types.push(argv[++i]);
+    else if (a === '--types') {
+      // A missing value must be a usage error, never an empty lane: a
+      // swallowed/absent value would filter out every note and exit 0 —
+      // indistinguishable from a genuine "no rules matched" (#13860 review).
+      const v = argv[i + 1];
+      if (v === undefined || v.trim() === '' || v.startsWith('--')) out.typesError = true;
+      else types.push(argv[++i]);
+    }
     else if (a === '--top') out.top = Number(argv[++i]);
     else if (a === '--no-write') out.write = false;
     else if (a === '--instance-id') out.instanceId = String(argv[++i] || '').trim();
@@ -520,6 +527,10 @@ export function main(argv = process.argv.slice(2), deps = {}) {
   const args = parseArgs(argv);
   if (args.instanceId === '' || args.alias === '') {
     stderr(USAGE + 'error: --instance-id and --alias are required (engine caller identity, VAULT-ARCH §8.5)\n');
+    return 2;
+  }
+  if (args.typesError) {
+    stderr(USAGE + 'error: --types requires a value (e.g. --types rule)\n');
     return 2;
   }
   if (args.entities.length === 0 && args.tags.length === 0 && args.terms.length === 0) {

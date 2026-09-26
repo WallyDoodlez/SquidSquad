@@ -89,7 +89,11 @@ def _schema_views(schema):
         "hub_types": hub_types,
         "budgeted_types": budgeted_types,
     }
-REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status", "confidence", "source"}
+# VAULT-ARCH v2 §4.3 (#13860): `confidence` and `source` are DROPPED from the
+# required set (no consumer ever read them; the v2 templates omit them). Legacy
+# notes still carrying them are value-checked below until the M1 transform
+# (#13862) strips them.
+REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status"}
 # Galaxy notes over this many lines are flagged for splitting (#13043 /
 # VAULT-ARCH §4.3 + vault-protocol Level-1 check 5). Galaxy only — areas/
 # projects/resources are exempt.

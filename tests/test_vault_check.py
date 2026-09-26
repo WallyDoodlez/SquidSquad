@@ -167,22 +167,18 @@ class TestCheckFrontmatter:
             issues = vault_check.check_frontmatter()
         assert issues == []
 
-    def test_missing_source_flagged(self, tmp_path):
-        """#13043 item 4: `source` is a REQUIRED field (VAULT-ARCH §4.3).
-        A note with every other field but no `source` must be flagged.
-        """
-        vault = self._setup_galaxy(tmp_path, {
-            "decision-no-source.md": (
-                "---\ntype: decision\ntags: [test]\ncreated: 2026-01-01\n"
-                "updated: 2026-01-01\nowner: skill\nstatus: active\n"
-                "confidence: high\nlinks: []\n---\n\n## Content"
-            ),
-        })
+    def test_v2_note_without_confidence_or_source_passes(self, tmp_path):
+        """VAULT-ARCH v2 §4.3 (#13860): `confidence`/`source` are dropped from
+        the required set -- a note shaped like the v2 templates validates."""
+        vault = self._setup_galaxy(tmp_path, {"decision-v2.md": "---\ntype: decision\ntags: [test]\ncreated: 2026-01-01\nupdated: 2026-01-01\nowner: worker\nstatus: active\n---\n\n## Content"})
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            assert vault_check.check_frontmatter() == []
+
+    def test_missing_owner_still_flagged(self, tmp_path):
+        vault = self._setup_galaxy(tmp_path, {"decision-no-owner.md": "---\ntype: decision\ntags: [test]\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: active\n---\n\n## Content"})
         with patch.object(vault_check, "VAULT_DIR", vault):
             issues = vault_check.check_frontmatter()
-        assert any("missing fields" in i and "source" in i for i in issues), (
-            f"expected a missing-source flag, got: {issues}"
-        )
+        assert any("missing fields" in i and "owner" in i for i in issues)
 
 
 class TestCheckGalaxySize:

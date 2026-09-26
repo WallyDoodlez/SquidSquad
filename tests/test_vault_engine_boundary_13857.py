@@ -55,9 +55,6 @@ BAN_PROSE = re.compile(r"raw-grep|grep ban|never (?:raw-)?grep|not grep|instead 
 V1_ALLOWLIST = {
     "references/sub-skills/common/vault-protocol.md": 2,
     "references/sub-skills/roles/pm/improvement-scan.md": 1,
-    "references/sub-skills/roles/pm/task-intake-phases.md": 1,
-    "references/sub-skills/roles/verifier/verification-issue-flow.md": 1,
-    "references/sub-skills/roles/worker/implement-tasks.md": 1,
     # Verifier-found in the #13857 AC3 rejection (outside the original scan
     # roots): the v1 grep-mode reference doc (linked from vault-protocol's
     # allowlisted entry; retires with vault-protocol's P4 rewrite) and the

@@ -175,6 +175,15 @@ class TestTypesLaneFilter:
         assert out["results"] == []
         assert [t["slug"] for t in out["traversed"]] == ["rule-never-rebase"]
 
+    @pytest.mark.parametrize("tail", [["--types"], ["--types", "--no-write"], ["--types", ""]])
+    def test_valueless_types_is_usage_error(self, tmp_path, tail):
+        """A dropped --types value must exit 2, never an empty lane that reads
+        as a genuine 'no rules matched' (review finding on commit 1)."""
+        proc = subprocess.run([NODE, str(QUERY), "--vault", str(make_lane_vault(tmp_path)),
+                               *IDENTITY, "--tags", "git", *tail],
+                              capture_output=True, text=True, cwd=str(REPO))
+        assert proc.returncode == 2 and "--types requires a value" in proc.stderr
+
     def test_multiple_types_comma_list(self, tmp_path):
         out = run_query(make_lane_vault(tmp_path), "--tags", "rebase", "--types", "rule,learning")
         assert {r["slug"] for r in out["results"]} == {"rule-never-rebase", "learning-rebase-incident"}
