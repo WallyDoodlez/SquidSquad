@@ -138,7 +138,7 @@
   "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883"
  },
  "13566_spec.json": {
-  "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
+  "references/sub-skills/common/improvement-scan.md": "6ffa7ec5241ef0a408e30b5f0321c68177d7335d"
  },
  "13569_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
@@ -151,10 +151,10 @@
   "references/sub-skills/roles/pm/task-intake.md": "ab2151ff0a3d2918258c032567412cd8f92021f8"
  },
  "13711_spec.json": {
-  "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
+  "references/sub-skills/common/improvement-scan.md": "6ffa7ec5241ef0a408e30b5f0321c68177d7335d"
  },
  "13735_spec.json": {
-  "references/sub-skills/roles/pm/improvement-scan.md": "a5bae24060e115f60b7ba9745d4dd319db9ad97c"
+  "references/sub-skills/roles/pm/improvement-scan.md": "a0d37df844897adda03609166b2d8af6652e227a"
  },
  "13746_spec.json": {
   "references/roles/pm/instructions.md": "98d70014d067f94d607b49cea2e69fb5281c897a"
@@ -178,7 +178,7 @@
   "references/sub-skills/roles/verifier/verification-issue-flow.md": "e2ac5ac823209d160f3cae01f129a4bf81d9a6fc",
   "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432",
   "references/sub-skills/roles/worker/implement-tasks.md": "4e00a7ec1726e959ebc5bbcf3d86286c8590adef",
-  "references/sub-skills/roles/worker/triage-issues.md": "9e906e464bf3fc214a5f55c7f8f99a14114c32d2"
+  "references/sub-skills/roles/worker/triage-issues.md": "f55a6d5cbf093c94017a286106cd6af623ed6db3"
  },
  "13861_spec.json": {
   "references/roles/pm/instructions.md": "98d70014d067f94d607b49cea2e69fb5281c897a",
