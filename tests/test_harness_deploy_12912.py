@@ -20,6 +20,7 @@ import sys
 SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import harness as harness_mod  # noqa: E402
 from harness import AgentState, HarnessState, receive_event, HarnessState as _HS  # noqa: E402
 
 
@@ -53,7 +54,7 @@ class TestHealthPollStatusSettling(unittest.TestCase):
         # window, and recovers to "running" past it (Finding 2 timeout).
         idx = src.find("agent.intent == AgentState.INTENT_DEPLOYING")
         self.assertNotEqual(idx, -1)
-        block = src[idx:idx + 2400]
+        block = src[idx:idx + 3400]  # #14131 widened: in-flight guard comment
         self.assertIn('agent.status = "deploying"', block)
         self.assertIn("_DEPLOY_WINDOW_SECONDS", block)
         self.assertIn('agent.status = "running"', block)
@@ -821,9 +822,13 @@ class TestDeployLockSerializes(unittest.TestCase):
     def test_ack_stop_spawns_deploy_thread(self):
         src = inspect.getsource(receive_event)
         idx = src.find('"deploy-halted"')
-        block = src[idx:idx + 3000]
-        self.assertIn("_run_deploy_sequence", block)
-        self.assertIn("Thread", block)
+        block = src[idx:idx + 3400]
+        # #14131: the thread is started via _start_deploy_thread (in-flight
+        # guard), which runs _run_deploy_sequence in a daemon Thread.
+        self.assertIn("_start_deploy_thread(role, ack_event_id)", block)
+        starter = inspect.getsource(harness_mod._start_deploy_thread)
+        self.assertIn("_run_deploy_sequence", starter)
+        self.assertIn("Thread", starter)
         # DS Finding 1: the deploy-signal's event_id (ack_event_id) is handed to
         # the deploy sequence so it can advance the cursor past the signal.
         self.assertIn("ack_event_id", block)

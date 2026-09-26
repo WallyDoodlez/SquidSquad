@@ -309,7 +309,9 @@ class AgentState:
                  # #12271 slice d — dispatch reference for progress-liveness
                  "last_dispatch_at",
                  # #12801 — operator FORCE-reboot marker (non-crash death signal)
-                 "operator_force_at")
+                 "operator_force_at",
+                 # #14131 — one-shot deploy-stall surface marker
+                 "deploy_stall_surfaced_for")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -411,7 +413,13 @@ class AgentState:
         # crash-loop streak (AC6). When this stamp is >= last_spawn_at the death
         # classifier treats the death as operator-initiated (not a crash). Cleared
         # on respawn. Transient/harness-session-owned: reset to None on load.
+        # #14132: also stamped by an IDLE /restart's immediate kill — any
+        # harness-requested kill is non-crash and bypasses the #12458 pause hold.
         self.operator_force_at = None
+        # #14131 — the intent_set_at of the deploy whose live-agent stall has
+        # already been surfaced to pm (one deploy-error per deploy intent, not
+        # one per 5s poll). Transient: never persisted.
+        self.deploy_stall_surfaced_for = None
 
     def reset_session_telemetry(self):
         """Clear per-session activity + pause telemetry on a fresh (re)spawn.
@@ -644,6 +652,36 @@ class AgentState:
             and ofa >= self.last_spawn_at
         )
 
+    def deploy_stall_action(self, now):
+        """#14131 — classify a LIVE agent stuck at intent=deploying.
+
+        The dead-PID deploy-window fallback in the health poller only recovers
+        an agent whose PID died; an agent that never emits ack-stop (a deaf
+        session, #14114) keeps its PID alive and sits at deploying forever —
+        never respawned, its lane frozen. Returns:
+
+          - None       — not deploying, no clock, or still inside the window.
+          - "recover"  — past the window and idle (no activity heartbeat within
+                         the window), or past the hard ceiling regardless: run
+                         the normal pull-first deploy sequence, which
+                         force-kills the old PID and respawns on the fresh
+                         CLAUDE.md.
+          - "surface"  — past the window but still active (heartbeat within the
+                         window — plausibly finishing a long atomic unit): do
+                         not kill working progress; surface the stall to pm and
+                         recover once it goes idle or hits the ceiling.
+        """
+        if self.intent != self.INTENT_DEPLOYING or self.intent_set_at is None:
+            return None
+        age = now - self.intent_set_at
+        if age <= _DEPLOY_WINDOW_SECONDS:
+            return None
+        idle = (self.last_activity_at is None
+                or now - self.last_activity_at > _DEPLOY_WINDOW_SECONDS)
+        if idle or age > _DEPLOY_ALIVE_CEILING_SECONDS:
+            return "recover"
+        return "surface"
+
     def to_dict(self):
         return {
             "role": self.role,
@@ -779,6 +817,9 @@ class HarnessState:
 
         reboot_roles = []
         state_changed = False
+        # #14131 — live deploy-stall actions, executed after the lock.
+        deploy_stall_recover = []
+        deploy_stall_surface = []
 
         with self._lock:
             for role in all_roles:
@@ -982,6 +1023,33 @@ class HarnessState:
                     agent.intent_set_at = None
                     state_changed = True
 
+                # #14131 — live agent stuck at intent=deploying. The dead-PID
+                # deploy-window fallback below only recovers a DEAD agent; one
+                # that never emits ack-stop (deaf session, #14114) keeps its PID
+                # alive and would sit at deploying forever. Classify here, act
+                # after the lock is released (the deploy thread and the event
+                # emit must not run under this non-reentrant lock). Skipped on
+                # pid_changed: a fresh PID is the deploy's own respawn.
+                if alive and not pid_changed:
+                    _now = time.time()
+                    _stall = agent.deploy_stall_action(_now)
+                    # DS F2: recovery kills + respawns, so it honours the
+                    # same spawn gates as the auto-reboot loop; with either
+                    # active the stall is only surfaced (once per intent).
+                    if (_stall == "recover"
+                            and (_NO_AUTO_REBOOT
+                                 or self.compose_freshness_failed)):
+                        _stall = "surface"
+                    if _stall == "recover":
+                        deploy_stall_recover.append(
+                            (role, _now - agent.intent_set_at))
+                    elif (_stall == "surface"
+                            and agent.deploy_stall_surfaced_for
+                            != agent.intent_set_at):
+                        agent.deploy_stall_surfaced_for = agent.intent_set_at
+                        deploy_stall_surface.append(
+                            (role, _now - agent.intent_set_at))
+
                 # Update status
                 if alive:
                     agent.status = "running"
@@ -1077,8 +1145,16 @@ class HarnessState:
                             time.time() - agent.intent_set_at
                             if agent.intent_set_at is not None else None
                         )
+                        # #14131: never while a deploy thread is in flight for
+                        # this role — the live-stall recovery kills the PID
+                        # already PAST the window, and the deploy sequence owns
+                        # that respawn; flipping to running here would race a
+                        # second (auto-reboot) spawn against it.
+                        with _deploy_inflight_lock:
+                            _deploy_owned = role in _deploy_inflight
                         if (_deploy_age is not None
-                                and _deploy_age > _DEPLOY_WINDOW_SECONDS):
+                                and _deploy_age > _DEPLOY_WINDOW_SECONDS
+                                and not _deploy_owned):
                             _log(f"{role}: dead at intent=deploying for "
                                  f"{_deploy_age:.0f}s (> {_DEPLOY_WINDOW_SECONDS}s "
                                  f"deploy window) — deploy never completed; "
@@ -1144,7 +1220,16 @@ class HarnessState:
                 )
                 death_candidate = (
                     (fresh_death or held or wedged_start) and should_reboot)
-                pause_reason = agent.active_pause(now) if death_candidate else None
+                # #14132: a harness-requested kill (/restart idle fast path or
+                # FORCE reboot — operator_force_death) is never an explained
+                # pause: the kill itself explains the death, so skip the hold
+                # and respawn on this poll. A genuine unexplained death while
+                # waiting still gets the #12458 hold.
+                pause_reason = (
+                    agent.active_pause(now)
+                    if death_candidate and not agent.operator_force_death()
+                    else None
+                )
 
                 if death_candidate and pause_reason is not None:
                     # Explained silence → HOLD reboot (mirrors the crash-looping
@@ -1394,6 +1479,20 @@ class HarnessState:
         # Persist state if anything changed (#4966)
         if state_changed or reboot_roles:
             self.save_state()
+
+        # #14131 — live deploy-stall recovery / surfacing, outside the lock.
+        for role, age in deploy_stall_recover:
+            try:
+                _recover_stalled_deploy(role, age)
+            except Exception as e:
+                _log(f"{role}: deploy-stall recovery raised "
+                     f"{type(e).__name__}: {e}")
+        for role, age in deploy_stall_surface:
+            try:
+                _surface_deploy_stall(role, age)
+            except Exception as e:
+                _log(f"{role}: deploy-stall surface raised "
+                     f"{type(e).__name__}: {e}")
 
         # Reboot outside the lock to avoid blocking health updates
         for role in reboot_roles:
@@ -4169,10 +4268,11 @@ async def receive_event(request: Request):
                 # the agent's cursor past the deploy-signal before respawn —
                 # without which the respawned agent re-fetches and re-halts on it
                 # (DS-12912 Finding 1 / AC4 infinite-loop guard).
-                threading.Thread(
-                    target=_run_deploy_sequence, args=(role, ack_event_id),
-                    daemon=True, name=f"deploy-{role}",
-                ).start()
+                # #14131: routed through _start_deploy_thread so a live-stall
+                # recovery started by the health poller can never double up.
+                if not _start_deploy_thread(role, ack_event_id):
+                    _log(f"{role}: deploy already in flight — ack-stop "
+                         f"deploy-halted not re-started (#14131)")
 
     # Update AgentState from event.
     # #12824: fail-soft. The event_lifecycle.append above is the
@@ -4733,23 +4833,13 @@ async def restart_agent(role: str, force: bool = False):
     # #8695: restart will respawn the process → new boot must re-assert
     # bootup-complete before events flow again.
     agent_state.bootup_complete = False
-    # #12801: stamp the FORCE marker BEFORE the immediate kill below, so the
-    # health poller that detects the dead PID reads it and classifies the death
-    # as operator-initiated rather than a crash (AC6). Harmless on the graceful
-    # path (left None) — only a force kill produces a SessionEnd-less death.
-    if force:
-        agent_state.operator_force_at = time.time()
-    state.set_agent(role, agent_state)
-    # #9242: disk write off the asyncio event loop.
-    await asyncio.to_thread(state.save_state)
-
-    # #4792: stop is now expressed via harness intent — no sentinel to clean.
-
     # #8689: if the agent is idle between cycles, kill the claude process
     # right now so the auto-reboot path (running periodic health-poll already
     # watches for is_dead + intent=restarting) fires within seconds instead
     # of waiting up to a full /loop interval (e.g. 30 minutes). For active
     # cycles, fall back to the graceful queued behavior.
+    # #14132: read BEFORE the state write below so the immediate-kill marker
+    # can be stamped in the same write, ahead of the kill.
     current_state = ""
     state_file = clone_path_p / ".squidsquad" / role / "current-state"
     try:
@@ -4761,6 +4851,25 @@ async def restart_agent(role: str, force: bool = False):
     # state (overriding the idle-only fast path); a graceful restart keeps the
     # idle-only immediate kill and queues a busy agent for next-boundary exit.
     immediate = force or current_state.startswith("idle")
+
+    # #12801: stamp the kill marker BEFORE the immediate kill below, so the
+    # health poller that detects the dead PID reads it and classifies the death
+    # as operator-initiated rather than a crash (AC6). #14132: stamped for the
+    # IDLE immediate kill too — an idle agent is exactly the one with
+    # waiting_since set, so without the marker the #12458 pause guard read the
+    # restart's own kill as an explained "waiting" pause and held the respawn
+    # for up to WAITING_MAX_SECONDS. Left None on the graceful queued path.
+    # #14114 AC2(c): remember the marker as it was, so a call that ends up
+    # killing nothing restores it rather than clearing it (a repeat restart
+    # while a requested kill is awaiting respawn must not strip its bypass).
+    prev_force_at = agent_state.operator_force_at
+    if immediate:
+        agent_state.operator_force_at = time.time()
+    state.set_agent(role, agent_state)
+    # #9242: disk write off the asyncio event loop.
+    await asyncio.to_thread(state.save_state)
+
+    # #4792: stop is now expressed via harness intent — no sentinel to clean.
     killed_pid = None
     if immediate:
         claude_pid, alive = reboot_agent._read_claude_pid(clone_path_p, role)
@@ -4773,9 +4882,23 @@ async def restart_agent(role: str, force: bool = False):
             except Exception as e:
                 _log(f"  {role}: WARNING — kill failed: {e}")
                 immediate = False
+                # #14132: the agent is still alive — undo this call's marker so
+                # a later natural death of this spawn is classified normally.
+                with state._lock:
+                    _a = state.agents.get(role)
+                    if _a is not None:
+                        _a.operator_force_at = prev_force_at
         else:
             # Already dead — the auto-reboot loop will pick it up next tick.
             immediate = False
+            # #14132 (DS F1): this restart killed nothing, so undo its marker —
+            # a prior natural crash keeps its crash-streak accounting and
+            # #12458 pause handling. #14114 AC2(c): restore (not clear) so an
+            # earlier requested kill still awaiting respawn keeps its bypass.
+            with state._lock:
+                _a = state.agents.get(role)
+                if _a is not None:
+                    _a.operator_force_at = prev_force_at
 
     if immediate:
         _kind = "force" if force else "idle"
@@ -5337,6 +5460,95 @@ _DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
 # §7.3). Generous — covers ensure-main → pull → compose → commit → push. The
 # deploy sequence respawns explicitly and clears it well before this elapses.
 _DEPLOY_WINDOW_SECONDS = 300
+# #14131: hard ceiling for a LIVE agent still ACTIVE at intent=deploying. Past
+# the window an active agent is only surfaced (it may be finishing a long atomic
+# unit); past this ceiling it is recovered anyway so a session that heartbeats
+# but never halts cannot freeze its lane indefinitely.
+_DEPLOY_ALIVE_CEILING_SECONDS = 1800
+
+# #14131: roles with a deploy thread started (queued on _deploy_lock or
+# running). Guards against double-starting a deploy for the same role — the
+# ack-stop path and the health poller's live-stall recovery both start one.
+_deploy_inflight = set()
+_deploy_inflight_lock = threading.Lock()
+
+
+def _latest_deploy_signal_id(role):
+    """#14131 — id of the newest deploy-signal targeting ``role`` still in the
+    event stream, or None. A live-stall recovery has no ack-stop to carry the
+    signal's id; passing it to the deploy sequence advances the cursor past it
+    so the respawned agent does not re-fetch it and re-halt."""
+    for ev in reversed(event_stream.get_all()):
+        if (ev.get("event_type") == "deploy-signal"
+                and (ev.get("payload") or {}).get("target_alias") == role):
+            return ev.get("id")
+    return None
+
+
+def _recover_stalled_deploy(role, age):
+    """#14131 — start the pull-first deploy sequence for a LIVE agent stuck at
+    intent=deploying (force-kills the old PID, respawns on the fresh CLAUDE.md)
+    unless a deploy is already in flight. Called by the health poller OUTSIDE
+    its state lock. Returns True iff a deploy thread was started."""
+    # DS F3: the poller classified under its lock and released it; a concurrent
+    # /restart or /stop may have changed the agent since. Re-verify on current
+    # state before killing anything.
+    with state._lock:
+        agent = state.agents.get(role)
+        still_stalled = (agent is not None
+                         and agent.deploy_stall_action(time.time()) == "recover")
+    if not still_stalled:
+        return False
+    if not _start_deploy_thread(role, _latest_deploy_signal_id(role)):
+        return False
+    _log(f"{role}: alive at intent=deploying for {age:.0f}s with no ack-stop "
+         f"(> {_DEPLOY_WINDOW_SECONDS}s window) — recovering via the deploy "
+         f"sequence (#14131)")
+    return True
+
+
+def _surface_deploy_stall(role, age):
+    """#14131 — surface a LIVE, still-ACTIVE agent that has not halted on its
+    deploy-signal past the window: one deploy-error to pm per deploy intent (the
+    poller's deploy_stall_surfaced_for marker dedups). Called outside the lock."""
+    _log(f"{role}: alive + active at intent=deploying for {age:.0f}s — "
+         f"surfacing deploy-error to pm (#14131)")
+    _emit_event("deploy-error", "pm", payload={
+        "target_alias": "pm",
+        "event_context": "deploy-error",
+        "failed_role": role,
+        "stage": "halt-timeout",
+        "detail": (f"{role}: alive and active but has not halted on its "
+                   f"deploy-signal after {age:.0f}s; the harness recovers it "
+                   f"once it is idle for {_DEPLOY_WINDOW_SECONDS}s or at "
+                   f"{_DEPLOY_ALIVE_CEILING_SECONDS}s"),
+        "respawn_ok": None,
+    })
+
+
+def _start_deploy_thread(role, deploy_signal_event_id=None):
+    """Start ``_run_deploy_sequence`` for ``role`` in a daemon thread unless one
+    is already in flight (#14131). Returns True iff a thread was started."""
+    with _deploy_inflight_lock:
+        if role in _deploy_inflight:
+            return False
+        _deploy_inflight.add(role)
+
+    def _main():
+        try:
+            _run_deploy_sequence(role, deploy_signal_event_id)
+        finally:
+            with _deploy_inflight_lock:
+                _deploy_inflight.discard(role)
+
+    try:
+        threading.Thread(target=_main, daemon=True,
+                         name=f"deploy-{role}").start()
+    except Exception:
+        with _deploy_inflight_lock:
+            _deploy_inflight.discard(role)
+        raise
+    return True
 
 # #13077: how long the deploy respawn waits for the deploy-halted agent's OWN
 # claude process to be reaped by the OS AFTER the harness force-kills it (the

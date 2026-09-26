@@ -195,6 +195,13 @@ Each install's vault ships a `vault-schema.json` at the vault root defining its 
 
 An install customizes its taxonomy by editing this file — no code or sub-skill change required. `vault-init`, `vault-create`, `vault_check.py`, and the search engine all read it.
 
+**Upgrades (#14127).** The installer seeds this file from `references/vault-schema-default.json` when it is absent. When it exists (every installer re-run, i.e. every upgrade), `wizard.install_vault_engine` additively merges in whatever the shipped default adds (`wizard.merge_vault_schema_defaults`):
+- a missing top-level key (e.g. `dedupThreshold`);
+- a missing type (e.g. `rule`);
+- a missing sub-key of a dict setting (e.g. a new `tieBreakWeights` weight).
+
+Values already present, user-registered types, and overridden type entries are never changed. A new framework type therefore reaches existing installs without clobbering their customization.
+
 ### 3.2 SquidSquad's own default profile — PARAG kept, hub layer added
 
 ```json

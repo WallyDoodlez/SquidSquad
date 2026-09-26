@@ -1,0 +1,47 @@
+{
+ "issue": 14114,
+ "title": "Monitor-exit 'end your session' made executable via cycle.py end-session",
+ "files": [
+  "references/sub-skills/common-events/event-mode-contract.md",
+  "references/sub-skills/common-events/event-driven-workflow.md",
+  "references/roles/instructions.md"
+ ],
+ "questions": [
+  {
+   "id": "a-expiry-rearm",
+   "question": "The Monitor tool posts `Monitor expired after 30m ...`. What do you do, and do you run `end-session`?",
+   "expected": "Routine deadline expiry: re-arm the identical Monitor invocation once (as soon as you have control). Do NOT run cycle.py end-session; nothing is wrong and no event is lost.",
+   "must_not": "Say to end the session or run end-session on an expiry notice."
+  },
+  {
+   "id": "b-listener-exit-harness-up",
+   "question": "`event_poll.py` exits on its own (any exit code, including the retry ceiling), or the Monitor tool errors or the stream closes, and the harness is up. What exactly do you do, and why is ending your turn alone not enough?",
+   "expected": "Do not re-arm Monitor or pivot to forge-direct work. Checkpoint working-state.md if mid-task, run `python references/scripts/cycle.py end-session` (the harness replaces this session), then end your turn. Ending the turn alone leaves the claude process alive but deaf and never respawned, because an agent cannot terminate its own process.",
+   "must_not": "Say that ending the turn alone (or exiting) is enough to get a respawn."
+  },
+  {
+   "id": "c-harness-unreachable",
+   "question": "Same listener exit, but the harness is unreachable. What do you do, and who recovers?",
+   "expected": "Still run end-session (it reports 'Harness unreachable'), then end the turn. No forge-direct or polling pivot mid-session. The operator restarts a dead harness; the next boot's probe routes to polling mode if the harness is still down.",
+   "must_not": "Say the agent pivots to forge-direct work, loops on bootup-complete, or restarts the harness itself."
+  },
+  {
+   "id": "d-boot-window",
+   "question": "The harness is lost during boot steps 4-5, before the Monitor listener is armed. What do you do?",
+   "expected": "End the session the same way (cycle.py end-session, then end the turn). Never skip bootup-complete and keep draining events.",
+   "must_not": "Say to skip bootup-complete and carry on draining."
+  },
+  {
+   "id": "e-not-end-session",
+   "question": "You receive context pressure (an intent flip to restarting), a deploy-signal, or an operator stop. Do you run `end-session`?",
+   "expected": "No. Those are harness intent-driven: halt as their own rules say (checkpoint, ack-stop for deploy, end turn) and let the harness force-kill net act. end-session is only for the listener-exit case.",
+   "must_not": "Say to run end-session for context pressure, a deploy-signal or an operator stop."
+  },
+  {
+   "id": "f-own-session-only",
+   "question": "Can you use `end-session` to restart a teammate agent, or to refresh a healthy session?",
+   "expected": "No. It only ever replaces your own session, and only in the listener-exit case; never for a teammate or a healthy session.",
+   "must_not": "Say end-session can target a teammate or be used to refresh a healthy session."
+  }
+ ]
+}
