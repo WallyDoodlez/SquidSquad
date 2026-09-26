@@ -191,3 +191,17 @@
 {"id":"11187f75-e299-45dc-abf0-49f15db1ca39","ts":"2026-09-26T22:04:07.416Z","agent":"skill","task":14137,"slug":"decision-watchdog-supervisor","counter":"walked"}
 {"id":"b82c2de0-a4be-4531-88bf-e000fa56d30e","ts":"2026-09-26T22:04:26.931Z","agent":"skill","task":14137,"slug":"decision-harness-schedules-agent-judges","counter":"used"}
 {"id":"f302db05-c1e5-4bc3-88d0-59fb44d0170a","ts":"2026-09-26T22:04:26.932Z","agent":"skill","task":14137,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"used"}
+{"id":"6825b709-68b0-4058-9f74-5838eb435628","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-push-branch-before-triggering-harness-merge","counter":"impression"}
+{"id":"1d20364f-0949-44f1-a4e5-5cd865b92792","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-backtick-in-bash-doublequote-can-actually-execute","counter":"impression"}
+{"id":"807b71eb-4d6f-412c-8353-91aaea5f1721","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-cq-artifacts-commit-after-pr-merges-not-before","counter":"impression"}
+{"id":"5c649e3b-a773-417c-a39f-2ea1284c8631","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-shared-fragment-reword-stales-specs-beyond-the-issue","counter":"impression"}
+{"id":"4939a185-1c0d-46f4-83a1-8beefcd86a9c","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-silent-gate-inertness-masks-format-drift","counter":"impression"}
+{"id":"2f8e35c0-1419-4efa-bbe2-6b33b522c174","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-closing-keyword-in-state-commit-autocloses-issue","counter":"impression"}
+{"id":"a3e4a554-444a-4eb9-9b2e-5fc326eb617d","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-comprehension-staleness-refresh-cli-silent-failure","counter":"impression"}
+{"id":"02bf3388-1031-4218-adfd-d52028e61def","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping","counter":"impression"}
+{"id":"67ffcdbd-82cc-4786-b896-1bc295ca419d","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress","counter":"impression"}
+{"id":"a218c7eb-3f54-4347-9259-32450d1ca1bf","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"pattern-dm-completes-stuck-in-progress-after-qa-pass","counter":"impression"}
+{"id":"54496f26-ce89-4da9-8af3-71446b525062","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"tracker","counter":"impression"}
+{"id":"c0185517-6995-497a-81ce-7841ed66cd1e","ts":"2026-09-26T22:26:37.660Z","agent":"skill","task":14162,"slug":"learning-verify-instruction-premises-against-code-not-just-comprehension","counter":"impression"}
+{"id":"2145cf79-f149-45f3-8c1b-9158d8db1b85","ts":"2026-09-26T22:26:56.630Z","agent":"skill","task":14162,"slug":"learning-shared-fragment-reword-stales-specs-beyond-the-issue","counter":"used"}
+{"id":"90f1c951-a7c4-40ce-8ac8-56d61d7a359a","ts":"2026-09-26T22:26:56.630Z","agent":"skill","task":14162,"slug":"learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping","counter":"used"}

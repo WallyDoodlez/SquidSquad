@@ -1,10 +1,11 @@
 # Working State
 
-- **Task**: #14162 (instruction-changing bugs skip intake / no CQ ACs). Then #14136.
+- **Task**: none (between tasks; halted for a deploy-signal 2026-09-26 ~18:50). Next queue item: #14136 (test_13373 flake), then #14133, #14130, #14128.
+- #14162: pending-test, PR #14165. #14164 (BRIEFING over budget) filed to PM, fixed by PM (81b89d23e).
 - #14137: pending-test, PR #14163.
 - #14147: pending-test, PR #14161.
 - #14151: pending-test, PR #14159. #14150: pending-test, PR #14160.
-- #14114: pending-test, PR #14158 (gate PASS 6628, DS r1+r2 fixed; 14099/14109 specs superseded_by 14114; verifier authors 14114_spec).
+- #14114: SHIPPED (PR #14158).
 - #14127: SHIPPED (PR #14156).
 - #14131 + #14132: SHIPPED (PR #14152). Live proof needs a harness restart.
 - #14144: PR #14149 merged; diagnostic.lock untracked on main. The AC6 live proof follows the next harness restart.
@@ -12,7 +13,7 @@
 - SHIPPED this session: #14109, #14124, #14125, #13861, #14144.
 
 ## Queue after
-- #14136, #14133, #14130, #14128. Approved but human-gated: #10690, #10686.
+- #14133, #14130, #14128. Approved but human-gated: #10690, #10686.
 
 ## Notes
 - DeepSeek is live again (#14148 closed). Review inputs MUST be inside the repo (e.g. .squidsquad/tmp/review-N/). Paths outside it are silently skipped and come back NO_FINDINGS, which is the #14150 bug.
