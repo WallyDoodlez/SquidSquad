@@ -126,7 +126,7 @@
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },
  "13464_spec.json": {
-  "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432"
+  "references/sub-skills/roles/verifier/verification.md": "84f1f8f36db0467fde8cf448e300634861367e05"
  },
  "13551_spec.json": {
   "references/sub-skills/common/git-commit.md": "b2afa0b6f0d82665cdba629f8c54a91a9a46d50c"
@@ -175,8 +175,8 @@
   "references/sub-skills/common/vault-remember.md": "3d23f38de8159be7a877fe4402a4ba8f19db804e",
   "references/sub-skills/roles/pm/task-intake-phases.md": "3ec466a548131bcc4074e7526d4ec981e56b1807",
   "references/sub-skills/roles/pm/vault-synthesis.md": "6827aa69351b3cec4849d92c5293611b7c2d7446",
-  "references/sub-skills/roles/verifier/verification-issue-flow.md": "e2ac5ac823209d160f3cae01f129a4bf81d9a6fc",
-  "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432",
+  "references/sub-skills/roles/verifier/verification-issue-flow.md": "64fe97c08ff1e56ad0c81193c4e6f9ec215159c1",
+  "references/sub-skills/roles/verifier/verification.md": "84f1f8f36db0467fde8cf448e300634861367e05",
   "references/sub-skills/roles/worker/implement-tasks.md": "4e00a7ec1726e959ebc5bbcf3d86286c8590adef",
   "references/sub-skills/roles/worker/triage-issues.md": "9e906e464bf3fc214a5f55c7f8f99a14114c32d2"
  },
@@ -197,7 +197,7 @@
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
-  "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432"
+  "references/sub-skills/roles/verifier/verification.md": "84f1f8f36db0467fde8cf448e300634861367e05"
  },
  "2181_spec.json": {
   "references/sub-skills/roles/dm/delivery-packaging.md": "548edcdb247ddb5fcaddd92bea3dbdf91dcfb6a5"
