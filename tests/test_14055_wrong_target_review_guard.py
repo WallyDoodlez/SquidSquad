@@ -120,6 +120,9 @@ class TestRouteGuardWiring:
         monkeypatch.setattr(model_router, "_load_adapter", lambda m: FakeAdapter)
         monkeypatch.setattr(model_router, "_log_diagnostic",
                             lambda e: calls.setdefault("actions", []).append(e.get("action")))
+        # tmp_path is outside the repo; admit it (the #14150 guard is tested
+        # separately).
+        monkeypatch.setattr(model_router, "_is_path_in_sandbox", lambda p: True)
         patch = tmp_path / "change.patch"
         patch.write_text("+++ b/references/scripts/foo.py\n", encoding="utf-8")
         out = tmp_path / "REVIEW.md"

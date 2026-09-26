@@ -19,7 +19,8 @@ Task types: research, discussion-prep, test-plan, improvement-scan,
 Exit codes:
     0 — success (output file written)
     1 — API failure or claude-only task (parent should fall back to Agent tool)
-    2 — configuration error (missing API key, invalid config)
+    2 — configuration or input error (missing API key, invalid config,
+        every input file skipped -- #14150)
 """
 
 import argparse
@@ -702,10 +703,34 @@ def _discard_output_artifact(output_file):
         pass
 
 
+def _classify_input_files(input_files_str):
+    """Split the comma-separated inputs into (readable, skipped) using the same
+    gates as _read_input_files: sandbox, sensitive-file, and readability.
+    ``skipped`` is a list of (path, reason). Pure: reads nothing but metadata
+    (#14150)."""
+    readable, skipped = [], []
+    for fpath in (input_files_str or "").split(","):
+        fpath = fpath.strip()
+        if not fpath:
+            continue
+        full_path = Path(fpath) if os.path.isabs(fpath) else REPO_ROOT / fpath
+        full_path_str = str(full_path)
+        if not _is_path_in_sandbox(full_path_str):
+            skipped.append((fpath, "outside repository boundary"))
+        elif _is_sensitive_file(full_path_str):
+            skipped.append((fpath, "sensitive file"))
+        elif not full_path.is_file() or not os.access(full_path_str, os.R_OK):
+            skipped.append((fpath, "not a readable file"))
+        else:
+            readable.append(fpath)
+    return readable, skipped
+
+
 def route(task_type, task_id, input_files, output_file, context):
     """Route a subagent task to the configured model.
 
-    Returns 0 on success, 1 on API failure (fallback), 2 on config error, 3 on timeout.
+    Returns 0 on success, 1 on API failure (fallback), 2 on config/input error
+    (incl. every input file skipped, #14150), 3 on timeout.
 
     Error-exit contract (#14025): the router does NOT fall back in-process --
     the caller falls back to Claude on any nonzero exit -- and no output
@@ -726,6 +751,35 @@ def route(task_type, task_id, input_files, output_file, context):
         # result (#14025) -- the caller performs the work via the Agent tool.
         _discard_output_artifact(output_file)
         return 1
+
+    # #14150: inputs were given but NONE can be read (outside the repo,
+    # sensitive, missing). The model would see zero code and could answer a
+    # clean NO_FINDINGS -- a silent false pass. Fail before any model call so
+    # the caller's fallback runs; warn on a partial skip.
+    if input_files and input_files.strip():
+        readable, skipped = _classify_input_files(input_files)
+        if skipped and not readable:
+            _log_diagnostic({
+                "timestamp": time.time(),
+                "task_type": task_type,
+                "task_id": task_id,
+                "model": model,
+                "action": "all-inputs-skipped",
+                "skipped": [f"{p} ({r})" for p, r in skipped],
+            })
+            print(
+                "[model_router] every input file was skipped ("
+                + "; ".join(f"{p}: {r}" for p, r in skipped)
+                + ") -- nothing to send the model; exiting 2 so the caller's "
+                "Claude fallback fires. Pass paths inside the repository.",
+                file=sys.stderr,
+            )
+            _discard_output_artifact(output_file)
+            return 2
+        for p, r in skipped:
+            print(f"[model_router] WARNING: input {p} skipped ({r}); "
+                  f"continuing with the {len(readable)} readable input(s).",
+                  file=sys.stderr)
 
     # Load provider
     provider_name, manifest = _load_provider_manifest(model)
