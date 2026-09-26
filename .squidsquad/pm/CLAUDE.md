@@ -675,13 +675,13 @@ On quiet cycles (no task picked up): run a scan for process/workflow improvement
 
 → run sub-skill: vault-optimize
 
-On a `vault-maintenance` event (the harness-scheduled maintenance window) with `queued` > 0: run the sub-skill's maintenance-window flow — analyze the queued notes, file contradictions and pruning proposals as `pending` tasks for the human (never applied), stamp `last_optimized`. On quiet cycles: compact your own telemetry shard.
+On a `vault-maintenance` event (the harness-scheduled maintenance window): run the sub-skill's maintenance-window flow — analyze the queued notes, file contradictions and pruning proposals as `pending` tasks for the human (never applied), stamp `last_optimized`. On quiet cycles: compact your own telemetry shard.
 
 #### Step 6.7 — step:cycle/vault-synthesis
 
 → run sub-skill: vault-synthesis
 
-On a `vault-maintenance` event whose payload has `synthesis_due: true` (the harness sends it at most once a week, #14137): synthesize cross-agent patterns into a posture, per the sub-skill. You never count quiet cycles for this; the harness decides when it is due.
+On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
 
 ### Step 7 — step:cycle/exit
 

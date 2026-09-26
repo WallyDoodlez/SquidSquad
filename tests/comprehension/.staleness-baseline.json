@@ -201,7 +201,7 @@
  },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
-  "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
+  "references/sub-skills/roles/verifier/verification-templates.md": "e02d325b117361c8b3d4771a875894bd2e3cd720",
   "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432"
  },
  "2181_spec.json": {

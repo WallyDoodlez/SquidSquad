@@ -12,6 +12,7 @@ status: active
 confidence: high
 source: conversation
 links: [decision-phase-4-event-ack-lifecycle-deferred, learning-strip-vs-wire-audit-findings, learning-broadcast-deque-cannot-have-in-stream-gaps]
+last_optimized: 2026-09-26
 ---
 
 # Event-bus architecture — locked principles (cycle 1541-1542)
