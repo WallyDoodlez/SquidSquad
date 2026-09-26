@@ -2281,6 +2281,47 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     return summary
 
 
+def merge_vault_schema_defaults(schema_path, default_path):
+    """Additively merge the framework's default vault schema into an install's
+    existing ``vault-schema.json`` (#14127).
+
+    Adds only what is ABSENT: a missing top-level key (e.g. ``dedupThreshold``),
+    a missing type under ``types`` (e.g. ``rule``), and a missing sub-key inside
+    an existing dict-valued setting (e.g. a new ``tieBreakWeights`` weight).
+    Never changes a value that is present, never removes anything, and never
+    edits a user-registered or user-overridden type. The file is rewritten only
+    when something was added. Returns the added paths (``"types.rule"``,
+    ``"dedupThreshold"``, ...), empty when already current.
+
+    Raises ValueError when the existing schema is not a JSON object, so a
+    hand-broken file is reported rather than silently replaced.
+    """
+    schema_path = Path(schema_path)
+    current = json.loads(schema_path.read_text(encoding="utf-8"))
+    defaults = json.loads(Path(default_path).read_text(encoding="utf-8"))
+    if not isinstance(current, dict):
+        raise ValueError(f"{schema_path} is not a JSON object")
+    added = []
+    for key, dval in defaults.items():
+        if key not in current:
+            current[key] = dval
+            added.append(key)
+            continue
+        cval = current[key]
+        if isinstance(dval, dict) and isinstance(cval, dict):
+            # `types`: add missing type names whole; an existing type entry is
+            # the install's (possibly overridden) definition — leave it as is.
+            # Other dict settings: add missing sub-keys only.
+            for sub, sval in dval.items():
+                if sub not in cval:
+                    cval[sub] = sval
+                    added.append(f"{key}.{sub}")
+    if added:
+        schema_path.write_text(json.dumps(current, indent=2) + "\n",
+                               encoding="utf-8")
+    return added
+
+
 def install_vault_engine(target_root):
     """Deploy the vault consumption engine and preflight Node (#13857).
 
@@ -2353,9 +2394,13 @@ def install_vault_engine(target_root):
 
     # 4. Seed the type registry (#13858, VAULT-ARCH §3.1/§3.2): every
     # install's vault carries vault-schema.json at the vault root; the
-    # engine, validator, and templates all read it. Create-if-absent only —
-    # an install customizes its taxonomy by editing this file, and an
-    # upgrade must never clobber that.
+    # engine, validator, and templates all read it. Create-if-absent — an
+    # install customizes its taxonomy by editing this file, and an upgrade
+    # must never clobber that. #14127: an EXISTING schema instead gets an
+    # additive merge of the framework defaults (new types such as `rule`,
+    # new keys such as `dedupThreshold`), so an upgraded install is not left
+    # without them; every value already present wins.
+    result["schema_merged"] = []
     try:
         seed_src = target_root / "references" / "vault-schema-default.json"
         schema = target_root / ".squidsquad" / "vault" / "vault-schema.json"
@@ -2365,9 +2410,15 @@ def install_vault_engine(target_root):
             result["schema_seeded"] = True
         else:
             result["schema_seeded"] = False
+            if seed_src.is_file() and schema.is_file():
+                result["schema_merged"] = merge_vault_schema_defaults(
+                    schema, seed_src)
+                if result["schema_merged"]:
+                    print("  vault-schema.json: added framework defaults "
+                          + ", ".join(result["schema_merged"]))
     except Exception as e:
         result["schema_seeded"] = False
-        print(f"  WARNING: vault-schema seed failed: {e}", file=sys.stderr)
+        print(f"  WARNING: vault-schema seed/merge failed: {e}", file=sys.stderr)
 
     # 5. Provision-time mint of the harness instance id (#13859; #13861 S5.2)
     # in gitignored .squidsquad/.instance-id — the writer axis of the
