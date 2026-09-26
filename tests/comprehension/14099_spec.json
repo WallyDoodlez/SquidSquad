@@ -1,5 +1,6 @@
 {
   "issue": 14099,
+  "superseded_by": 14114,
   "title": "Monitor deadline-expiry re-arm vs. exit-session rule (event-mode contract, L1 5, AGENT-RUNTIME inline resume)",
   "authored_by": "verifier",
   "ac": "AC4 (LLM-consumed instruction change; replaces superseded 9742_spec.json)",
