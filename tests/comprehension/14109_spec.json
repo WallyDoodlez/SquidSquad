@@ -1,5 +1,6 @@
 {
   "issue": 14109,
+  "superseded_by": 14114,
   "title": "Single harness-loss recovery path in event-mode-contract.md / event-driven-workflow.md",
   "files": [
     "references/sub-skills/common-events/event-mode-contract.md",
