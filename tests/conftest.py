@@ -223,3 +223,127 @@ def config_text():
 @pytest.fixture
 def skill_claude_md():
     return (SQUIDSQUAD_DIR / "skill" / "CLAUDE.md").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# #14108: live-forge guard — fail LOUDLY when a unit test reaches the network.
+#
+# Root cause of #14108: test_git_ops::test_branch_delete_success patched only
+# _run_list, so git_ops.branch_delete()'s _git_push(["origin", "--delete",
+# name]) ran a REAL push-delete against the live GitHub origin (seen stalling
+# the static gate on a hidden credential prompt). An audit found siblings: a
+# harness code-version test doing a real `git fetch origin main`, and
+# cycle_post tests that, on a clone with a real .squidsquad-state worktree,
+# commit and push the live state branch. A unit test that can delete a remote
+# branch is a data-loss hazard, not just a stall.
+#
+# The guard wraps subprocess.run / subprocess.Popen for every test outside
+# tests/integration/ (those talk to the forge on purpose) and raises on:
+#   - git push / fetch / pull / ls-remote whose `origin` is a network URL
+#     (http(s)://, ssh://, git@...) -- local tmp-repo "origins" stay allowed;
+#   - gh issue / pr / api / label / repo / release / run / workflow.
+# A test that mocks the subprocess layer replaces the wrapper and is
+# unaffected; only calls that would really leave the machine are refused.
+# Read-only live smokes opt out explicitly with @pytest.mark.live_forge.
+# ---------------------------------------------------------------------------
+
+import os as _os
+import subprocess as _subprocess
+
+_GIT_NETWORK_VERBS = {"push", "fetch", "pull", "ls-remote"}
+_GH_FORGE_VERBS = {"issue", "pr", "api", "label", "repo", "release", "run", "workflow"}
+_REAL_RUN = _subprocess.run
+_REAL_POPEN = _subprocess.Popen
+
+
+def _argv(args):
+    if isinstance(args, (list, tuple)):
+        return [str(a) for a in args]
+    return str(args).split()
+
+
+def _is_network_remote(url):
+    url = (url or "").strip()
+    return (url.startswith(("http://", "https://", "ssh://", "git://"))
+            or (url.startswith("git@") and ":" in url))
+
+
+def _live_forge_call(args, cwd):
+    """Return a reason string when ``args`` would reach the real forge."""
+    argv = _argv(args)
+    if not argv:
+        return None
+    head = _os.path.basename(argv[0]).lower()
+    if head.endswith(".exe"):
+        head = head[:-4]
+    if head == "gh":
+        verb, rest = "", iter(argv[1:])
+        for a in rest:
+            if a in ("-R", "--repo"):  # global flag taking a value
+                next(rest, None)
+            elif not a.startswith("-"):
+                verb = a
+                break
+        if verb in _GH_FORGE_VERBS:
+            return f"real `gh {verb}` call"
+        return None
+    if head != "git":
+        return None
+    verb = next((a for a in argv[1:] if a in _GIT_NETWORK_VERBS), None)
+    if verb is None:
+        return None
+    # `git -C <dir>` (repeatable, each relative to the previous) sets the repo
+    # the command acts on -- probe THAT repo's origin, not the process cwd.
+    where = Path(cwd) if cwd else Path.cwd()
+    for i, a in enumerate(argv[1:-1], start=1):
+        if a == "-C":
+            where = where / argv[i + 1]
+    probe = _REAL_RUN(["git", "remote", "get-url", "origin"], cwd=str(where),
+                      capture_output=True, text=True, encoding="utf-8",
+                      errors="replace", check=False)
+    origin = (probe.stdout or "").strip()
+    if _is_network_remote(origin):
+        return f"real `git {verb}` against network origin {origin}"
+    return None
+
+
+def _guarded(call):
+    def check(args, *a, **kw):
+        reason = _live_forge_call(args, kw.get("cwd"))
+        if reason:
+            raise RuntimeError(
+                f"#14108 live-forge guard: unit test attempted a {reason} "
+                f"({' '.join(_argv(args))[:160]}). Mock the subprocess layer "
+                f"(e.g. patch git_ops._git_push / the module's _run) or move "
+                f"the test under tests/integration/.")
+        return call(args, *a, **kw)
+    return check
+
+
+class _GuardedPopen(_REAL_POPEN):
+    def __init__(self, args, *a, **kw):
+        reason = _live_forge_call(args, kw.get("cwd"))
+        if reason:
+            raise RuntimeError(
+                f"#14108 live-forge guard: unit test attempted a {reason} "
+                f"({' '.join(_argv(args))[:160]}).")
+        super().__init__(args, *a, **kw)
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "live_forge: test deliberately makes READ-ONLY live forge calls; "
+        "exempt from the #14108 live-forge guard. Never use for writes.")
+
+
+@pytest.fixture(autouse=True)
+def _block_live_forge_calls(request, monkeypatch):
+    path = Path(str(request.node.fspath)).resolve()
+    if ((REPO_ROOT / "tests" / "integration") in path.parents
+            or request.node.get_closest_marker("live_forge")):
+        yield
+        return
+    monkeypatch.setattr(_subprocess, "run", _guarded(_REAL_RUN))
+    monkeypatch.setattr(_subprocess, "Popen", _GuardedPopen)
+    yield
