@@ -68,7 +68,7 @@ ROUND_TRIP_FIELDS = [
     "improvement-scan-cool-down",
     "idle-scan-burst",
     "verbose-mode",
-    "working-branch", "state-branch",
+    "working-branch",  # #14144: state-branch retired
     "forge-provider", "forge-endpoint",
     "default-model", "research-model", "discussion-prep-model", "test-plan-model",
     "qa-execution-model", "comprehension-model", "improvement-scan-model",

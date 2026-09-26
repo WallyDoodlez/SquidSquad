@@ -1861,7 +1861,7 @@ def _state_blob_sizes(ref):
     return sizes
 
 
-def _merge_dropped_state_paths(pre_ref):
+def _merge_dropped_state_files(pre_ref):
     """#13556 -- protected state/vault paths a just-completed merge silently
     DROPPED: present + non-empty at ``pre_ref`` (our pre-merge tree) but now
     absent OR emptied at ``HEAD``. This is the merge=ours/union modify-vs-delete
@@ -1951,7 +1951,7 @@ def _restore_merge_dropped_state(role=None):
         if (p2.returncode != 0 or not p2.stdout.strip()
                 or p1.stdout.strip() != orig):
             return []
-        dropped = _merge_dropped_state_paths("ORIG_HEAD")
+        dropped = _merge_dropped_state_files("ORIG_HEAD")
         if not dropped:
             return []
         restored = []
