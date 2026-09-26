@@ -1,17 +1,20 @@
 # Working State
 
-- **Task**: 13860 (PRD-VAULT-V2 P4 consumption pipeline) — forge status:in-progress, STUDY PHASE ONLY (no branch, no code yet). Gates verified cleared: P3 #13859 shipped; SS11 #3 rules-lane RESOLVED 2026-07-20 (dedicated `rule` type, PRD line 58 + VAULT-ARCH SS11 row 3). On resume: pull main first, then re-verify these gaps on FRESH main (a mapping subagent read a stale tree and wrongly said impressions-report/compact scripts do not exist): (1) is `rule` registered in .squidsquad/vault/vault-schema.json + lib/consumption.mjs DEFAULT_CONFIG types? (2) does vault-query.mjs have a type/folder filter for rule-lane queries? (3) any `dedupThreshold` key? Then post the front-loaded decomposition comment on #13860 and branch squidsquad/task/13860. Spec: VAULT-ARCH SS7 + SS9.2-9.5 (read), PRD P4 S4.1-S4.5. Surfaces: PM intake = references/sub-skills/roles/pm/task-intake-phases.md Phase 1 (raw grep today) + Phase 3; worker pickup = roles/worker/implement-tasks.md step 2c (raw grep); verifier = roles/verifier/verification-issue-flow.md:25-29 (raw grep); sub-skills common/vault-protocol.md, common/vault-remember.md, common/vault-optimize.md, roles/pm/vault-synthesis.md; engine CLIs references/skills/vault-search/scripts/vault-query.mjs (--instance-id --alias --task --terms --tags --entities --top --no-write) + record-consumption.mjs (--slugs --task --instance-id --alias). No fix-plan concept exists yet (S4.2 new).
-- Halted for deploy-signal 4b9dcd772bd1b76b (2026-09-26) at a between-task boundary on clean main.
+- **Task**: none. Updated 2026-09-26 14:25. Halting for the held deploy-signal 91d8f8c70e690935 (ack-stop deploy-halted sent right after this write).
+- Next on respawn: #14131 (HIGH, harness: an agent alive at intent=deploying is never recovered) together with #14132 (/restart of an idle agent held up to 30 min by the 'waiting' pause-guard). Same health-poller area, one PR. The #14131 plan is posted on the issue:
+  - alive + idle (no activity heartbeat within the window) + past `_DEPLOY_WINDOW_SECONDS` + no deploy in flight -> `_run_deploy_sequence(role, None)`;
+  - alive + active past a ceiling -> one deploy-error to pm;
+  - module-level in-flight set guards double starts (register at every deploy-thread start).
+  - For #14132, exempt the /restart's own requested kill from active_pause (e.g. an `operator_force_at`-style stamp consulted by the reboot decision).
+- Pending-test (verifier): #14109 (PR #14111), #14124 + #14125 (PR #14134). SHIPPED: #13860 (PR #14126); its receipts file is committed on main.
 
-## This session (2026-09-26)
-- Merged/shipped: #14054, #13859 (shipped), #14095, #14096, #14098, #14108 (PR #14112), #14099 (PR #14110).
-- Pending-test: #14109 (PR #14111; PM ACs met, 8694 spec updated per AC4).
-- Queue after P4: #14114 (assigned: 'end your session' not executable -> deaf session; PM-filed).
-- Filed #14113 (state-worktree junk; PM moved it to pending-human-review).
-- Monitor expires at 30m (runtime cap): re-arm on the expiry notice (the #14099 rule).
+## Queue after
+- #14127 (vault schema upgrade merge; unblocked now #13860 merged), #14114 (after #14109 merges; same file), #14130 (flaky PS1 launcher test).
+- Approved: #13861 P5 (P4 gate now satisfied), #13862 M-track, #10690, #10686.
 
-## Queue snapshot
-- Approved-but-gated: #13861 P5 (gated P4), #13862 M-track (gated P1-P4), #10690, #10686.
+## Notes
+- gh active account Naahtec is pull-only: push with a `gh auth token --user WallyDoodlez` credential helper; for gh calls use git_ops/tracker (pinned GH_TOKEN).
+- Before switching branches, `git restore` the composed .squidsquad/*/CLAUDE*.md if dirty (stale recompose from branch source).
 
 ## Improvement Scan
 Status: idle. Last scan 2026-07-19 05:52.
