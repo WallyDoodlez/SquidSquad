@@ -1,6 +1,7 @@
 # Working State
 
-- **Task**: #14147 (verifier pending-test scans hardcode the skill alias). Then #14137.
+- **Task**: #14137 (vault-synthesis dormant in event mode). Then #14136.
+- #14147: pending-test, PR #14161.
 - #14151: pending-test, PR #14159. #14150: pending-test, PR #14160.
 - #14114: pending-test, PR #14158 (gate PASS 6628, DS r1+r2 fixed; 14099/14109 specs superseded_by 14114; verifier authors 14114_spec).
 - #14127: SHIPPED (PR #14156).
@@ -10,7 +11,7 @@
 - SHIPPED this session: #14109, #14124, #14125, #13861, #14144.
 
 ## Queue after
-- #14137, #14136, #14133, #14130, #14128. Approved but human-gated: #10690, #10686.
+- #14136, #14133, #14130, #14128. Approved but human-gated: #10690, #10686.
 
 ## Notes
 - DeepSeek is live again (#14148 closed). Review inputs MUST be inside the repo (e.g. .squidsquad/tmp/review-N/). Paths outside it are silently skipped and come back NO_FINDINGS, which is the #14150 bug.

@@ -153,3 +153,15 @@
 {"id":"c77076df-7c46-42db-a9c9-582cd02e20c4","ts":"2026-09-26T21:38:09.050Z","agent":"skill","task":14150,"slug":"learning-common-events-fragments-are-mode-agnostic","counter":"impression"}
 {"id":"ca051165-1dbe-4041-a594-f62aafce7fd2","ts":"2026-09-26T21:38:25.855Z","agent":"skill","task":14150,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"used"}
 {"id":"6dbd121d-5808-4f80-991b-4b4464bb19bd","ts":"2026-09-26T21:38:25.855Z","agent":"skill","task":14150,"slug":"learning-default-port-fallback-is-live-egress-trap-in-tests","counter":"used"}
+{"id":"44a88ea1-c191-4d87-b785-d2db14d748e3","ts":"2026-09-26T21:53:23.170Z","agent":"skill","task":14147,"slug":"learning-recompose-and-config-carry-across-checkout","counter":"impression"}
+{"id":"c5df87f4-b57b-4b40-8cc7-c9fb3458bd40","ts":"2026-09-26T21:53:23.170Z","agent":"skill","task":14147,"slug":"learning-branch-checkout-mid-background-test-corrupts-results","counter":"impression"}
+{"id":"45c08fbf-78e2-4c70-9153-f465cba2e826","ts":"2026-09-26T21:53:23.170Z","agent":"skill","task":14147,"slug":"learning-state-lane-deletion-never-rides-commit-it-now","counter":"impression"}
+{"id":"3276411c-9799-448a-adfc-7af71d53a6d4","ts":"2026-09-26T21:53:23.170Z","agent":"skill","task":14147,"slug":"learning-backtick-in-bash-doublequote-can-actually-execute","counter":"impression"}
+{"id":"a51fdb6e-7481-4bff-bbad-f6eaf246f483","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-silent-gate-inertness-masks-format-drift","counter":"impression"}
+{"id":"573af4c2-253e-4999-9ec8-c72e00f1a6c9","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-single-static-gate-red-may-be-flake-rerun-before-reject","counter":"impression"}
+{"id":"d81cab47-2405-460e-9d8a-97fbadfd25b6","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop","counter":"impression"}
+{"id":"54354f02-bbbf-4267-8cf8-4637dd56272a","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-closing-keyword-in-state-commit-autocloses-issue","counter":"impression"}
+{"id":"baf778f5-e770-4707-bdb2-7f4bd5afbe96","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping","counter":"impression"}
+{"id":"7796e107-8321-4818-9d25-7634e709eaee","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-gh-pr-edit-broken-use-gh-api-patch","counter":"impression"}
+{"id":"65c6f2c6-a889-4d9f-834f-47af9e192e0e","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress","counter":"impression"}
+{"id":"f5b1a504-3eb6-4b09-bd8a-c9329096cb91","ts":"2026-09-26T21:53:23.171Z","agent":"skill","task":14147,"slug":"learning-raw-pytest-shows-known-failures-use-run-tests-static","counter":"impression"}
