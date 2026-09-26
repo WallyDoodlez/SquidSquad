@@ -112,6 +112,65 @@ def test_source_change_flags_spec_naming_composed_output(monkeypatch):
     assert "references/roles/pm/SOUL.md (composed into .squidsquad/pm/CLAUDE.md)" in v[0]
 
 
+def test_dropped_source_is_flagged(monkeypatch):
+    # DS review F1: a source deleted (or no longer composed in) leaves the
+    # tracked set; its baseline key must not be silently ignored.
+    _one_spec(monkeypatch, "1" * 40, {
+        PM_OUT: "1" * 40, "references/roles/pm/SOUL.md": "1" * 40})
+    monkeypatch.setattr(cs, "load_baseline", lambda: {"5_spec.json": {
+        "references/roles/pm/SOUL.md": "1" * 40,
+        "references/roles/pm/retired.md": "3" * 40}})
+    v = cs.check()
+    assert v == ["5_spec.json <- references/roles/pm/retired.md no longer "
+                 "tracked (deleted, or no longer composed in) since last review"]
+
+
+def test_dropped_key_check_is_scoped_to_composed_specs(monkeypatch):
+    # Specs naming no composed output keep the pre-#14171 scope: a retired
+    # explicit fragment is a different staleness class.
+    monkeypatch.setattr(cs, "load_specs", lambda: {
+        "6_spec.json": {"files": ["references/roles/SOUL.md"]}})
+    monkeypatch.setattr(cs, "load_baseline", lambda: {"6_spec.json": {
+        "references/roles/SOUL.md": "1" * 40,
+        "references/roles/retired.md": "3" * 40}})
+    monkeypatch.setattr(cs, "committed_blob_sha", lambda p: "1" * 40)
+    assert cs.check() == []
+
+
+def test_alias_grammar_matches_compose():
+    # DS review F2: every alias compose.deploy_alias_v2 accepts is recognized.
+    import compose
+    assert compose._V2_ALIAS_RE.pattern == r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    for alias in ("pm", "worker.fe", "web-2", "a_b"):
+        assert cs._COMPOSED_OUTPUT_RE.match(f".squidsquad/{alias}/CLAUDE.md")
+    assert not cs._COMPOSED_OUTPUT_RE.match(".squidsquad/.hidden/CLAUDE.md")
+
+
+def test_resolution_failure_against_source_keyed_entry_says_so(monkeypatch):
+    # DS review F3: the fallback must not report a fake sha drift against a
+    # baseline that is keyed on sources.
+    monkeypatch.setattr(cs, "load_specs", lambda: {
+        "7_spec.json": {"files": [PM_OUT]}})
+    monkeypatch.setattr(cs, "composed_output_sources", lambda p: None)
+    monkeypatch.setattr(cs, "load_baseline", lambda: {"7_spec.json": {
+        "references/roles/pm/SOUL.md": "1" * 40}})
+    monkeypatch.setattr(cs, "committed_blob_sha", lambda p: "1" * 40)
+    v = cs.check()
+    assert len(v) == 1
+    assert "cannot resolve its compose sources" in v[0]
+    assert "changed since last review" not in v[0]
+
+
+def test_resolution_failure_against_blob_keyed_entry_compares_blob(monkeypatch):
+    monkeypatch.setattr(cs, "load_specs", lambda: {
+        "8_spec.json": {"files": [PM_OUT]}})
+    monkeypatch.setattr(cs, "composed_output_sources", lambda p: None)
+    monkeypatch.setattr(cs, "load_baseline", lambda: {"8_spec.json": {
+        PM_OUT: "1" * 40}})
+    monkeypatch.setattr(cs, "committed_blob_sha", lambda p: "1" * 40)
+    assert cs.check() == []
+
+
 def test_live_baseline_pins_no_composed_output():
     baseline = json.loads(cs.BASELINE.read_text(encoding="utf-8"))
     for spec, entry in baseline.items():

@@ -89,7 +89,9 @@ def spec_fragment_paths(spec):
 # so pairing a spec to its blob turned the gate red fleet-wide after every
 # deploy (#14135, #14171). A spec naming one is keyed on the compose SOURCES
 # that feed it instead, so the drift lands on the PR that changes a source.
-_COMPOSED_OUTPUT_RE = re.compile(r"^\.squidsquad/([A-Za-z0-9_-]+)/CLAUDE\.md$")
+# Alias grammar matches compose._V2_ALIAS_RE.
+_COMPOSED_OUTPUT_RE = re.compile(
+    r"^\.squidsquad/([A-Za-z0-9][A-Za-z0-9_.-]*)/CLAUDE\.md$")
 
 
 def composed_output_sources(rel_path):
@@ -201,11 +203,27 @@ def check():
             live = shas[frag]
             if live is None:
                 continue  # untracked fragment — not a committed-record drift
-            if entry.get(frag) != live:
+            if (via is None and frag not in entry
+                    and _COMPOSED_OUTPUT_RE.match(frag)):
+                # Fallback path against a source-keyed entry: say so, rather
+                # than report a sha drift that never happened.
+                violations.append(
+                    f"{name} <- {frag}: cannot resolve its compose sources "
+                    f"(#14171) — fix the resolution, or refresh {name} to "
+                    f"pin the generated file")
+            elif entry.get(frag) != live:
                 src = f"{frag} (composed into {via})" if via else frag
                 violations.append(
                     f"{name} <- {src} changed since last review "
                     f"(baseline {str(entry.get(frag))[:9]} != HEAD {live[:9]})")
+        if any(via for _frag, via in frags):
+            # A source deleted or no longer composed in drops out of the
+            # tracked set, so its content left the composed file unreviewed.
+            live_set = {frag for frag, _via in frags}
+            for gone in sorted(set(entry) - live_set):
+                violations.append(
+                    f"{name} <- {gone} no longer tracked (deleted, or no "
+                    f"longer composed in) since last review")
     return violations
 
 
