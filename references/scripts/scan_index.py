@@ -730,12 +730,7 @@ def _prune_scan_history(history_file, keep=SCAN_HISTORY_RETENTION):
 
 
 def _resolve_scan_history_path(role, root):
-    """Resolve a role's scan-history.md, preferring the state worktree
-    (.squidsquad-state/) over main (.squidsquad/) — same preference order
-    as rebuild()'s search_dirs (#3664)."""
-    state_path = root / ".squidsquad-state" / role / "scan-history.md"
-    if state_path.exists():
-        return state_path
+    """A role's scan-history.md -- on main under .squidsquad/ (#14144)."""
     return root / ".squidsquad" / role / "scan-history.md"
 
 
@@ -769,13 +764,8 @@ def rebuild(db_path=None):
     root = REPO_ROOT if db_path is None else path.parent.parent
     now = _now_iso()
 
-    # Find all scan-history.md files — check both main (.squidsquad/) and
-    # state worktree (.squidsquad-state/) for scan-history.md (#3664)
-    squidsquad_dir = root / ".squidsquad"
-    state_dir = root / ".squidsquad-state"
-    search_dirs = [squidsquad_dir]
-    if state_dir.exists():
-        search_dirs.insert(0, state_dir)  # prefer state worktree
+    # Find all scan-history.md files under .squidsquad/ (#14144: single location)
+    search_dirs = [root / ".squidsquad"]
     total_scans = 0
     total_findings = 0
     seen_roles = set()

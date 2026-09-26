@@ -514,3 +514,19 @@
 {"timestamp": 1790451631.3651536, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 309, "elapsed_seconds": 0.1}
 {"timestamp": 1790451631.3716931, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 0, "elapsed_seconds": 0.0}
 {"timestamp": 1790452148.7501433, "task_type": "code-review", "task_id": "#14144", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "api-error", "error": "OpenAI API error: Error code: 402 - {'error': {'message': 'Insufficient Balance (request_id: 9add02c5-df0d-4ed2-a49b-4da2c87cfdc5)', 'type': 'unknown_error', 'param': None, 'code': 'invalid_request_error'}}", "elapsed_seconds": 392.7}
+{"timestamp": 1790453120.7592337, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790453120.7612455, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790453120.7622488, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790453120.7745347, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 11, "elapsed_seconds": 0.0}
+{"timestamp": 1790453120.7822225, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 29, "elapsed_seconds": 0.0}
+{"timestamp": 1790453120.7893438, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 4, "elapsed_seconds": 0.0}
+{"timestamp": 1790453120.7983353, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 309, "elapsed_seconds": 0.0}
+{"timestamp": 1790453120.806203, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 0, "elapsed_seconds": 0.0}
+{"timestamp": 1790453375.4949987, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790453375.497321, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790453375.4983277, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790453375.5109425, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 11, "elapsed_seconds": 0.0}
+{"timestamp": 1790453375.5188622, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 29, "elapsed_seconds": 0.0}
+{"timestamp": 1790453375.5282085, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 4, "elapsed_seconds": 0.0}
+{"timestamp": 1790453375.6746244, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 309, "elapsed_seconds": 0.1}
+{"timestamp": 1790453375.6789424, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 0, "elapsed_seconds": 0.0}

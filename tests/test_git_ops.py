@@ -1260,7 +1260,7 @@ class TestRestoreMergeDroppedState13556:
         assert sizes == {".squidsquad/vault/galaxy/a.md": 42}
 
     def test_dropped_paths_helper_ignores_already_empty(self):
-        """_merge_dropped_state_paths: a path already empty pre-merge is not a
+        """_merge_dropped_state_files: a path already empty pre-merge is not a
         'drop'; only present+non-empty -> absent/empty counts."""
         before = {".squidsquad/vault/galaxy/a.md": 40,
                   ".squidsquad/vault/galaxy/b.md": 0,   # already empty pre-merge
@@ -1273,7 +1273,7 @@ class TestRestoreMergeDroppedState13556:
         # working-state.md absent in `after` -> dropped.
         with patch.object(git_ops, "_state_blob_sizes",
                           side_effect=[before, after, incoming]):
-            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+            assert git_ops._merge_dropped_state_files("ORIG_HEAD") == [
                 ".squidsquad/skill/working-state.md",
                 ".squidsquad/vault/galaxy/a.md",
             ]
@@ -1283,7 +1283,7 @@ class TestRestoreMergeDroppedState13556:
         spurious restore."""
         for baseline in (None, {}):
             with patch.object(git_ops, "_state_blob_sizes", return_value=baseline):
-                assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == []
+                assert git_ops._merge_dropped_state_files("ORIG_HEAD") == []
 
     def test_dropped_paths_after_git_failure_no_mass_restore(self):
         """DS-13556 F2: if the HEAD ls-tree FAILS (None), do NOT treat every
@@ -1292,7 +1292,7 @@ class TestRestoreMergeDroppedState13556:
                   ".squidsquad/skill/working-state.md": 800}
         with patch.object(git_ops, "_state_blob_sizes",
                           side_effect=[before, None]):  # before ok, HEAD git-fails
-            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == []
+            assert git_ops._merge_dropped_state_files("ORIG_HEAD") == []
 
     def test_dropped_paths_genuine_empty_head_restores_all(self):
         """A merge that deleted ALL protected files (HEAD genuinely empty {}, not
@@ -1303,7 +1303,7 @@ class TestRestoreMergeDroppedState13556:
         origin_state = dict(before)  # origin/<working> never deleted these -> genuine drop
         with patch.object(git_ops, "_state_blob_sizes",
                           side_effect=[before, {}, origin_state]):  # HEAD genuinely has none
-            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+            assert git_ops._merge_dropped_state_files("ORIG_HEAD") == [
                 ".squidsquad/skill/working-state.md",
                 ".squidsquad/vault/galaxy/a.md",
             ]
@@ -1321,7 +1321,7 @@ class TestRestoreMergeDroppedState13556:
         # working-state.md: origin still has real content -> genuine drop.
         with patch.object(git_ops, "_state_blob_sizes",
                           side_effect=[before, after, origin_state]):
-            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+            assert git_ops._merge_dropped_state_files("ORIG_HEAD") == [
                 ".squidsquad/skill/working-state.md",
             ]
 
@@ -1333,7 +1333,7 @@ class TestRestoreMergeDroppedState13556:
         origin_state = {}  # path doesn't exist on the canonical remote at all
         with patch.object(git_ops, "_state_blob_sizes",
                           side_effect=[before, after, origin_state]):
-            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == []
+            assert git_ops._merge_dropped_state_files("ORIG_HEAD") == []
 
     def test_dropped_paths_origin_unreadable_falls_back_to_restore(self):
         """#13723: if origin/<working> can't be resolved (no remote configured,
@@ -1347,7 +1347,7 @@ class TestRestoreMergeDroppedState13556:
         after = {}
         with patch.object(git_ops, "_state_blob_sizes",
                           side_effect=[before, after, None]):
-            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+            assert git_ops._merge_dropped_state_files("ORIG_HEAD") == [
                 ".squidsquad/vault/galaxy/a.md",
             ]
 

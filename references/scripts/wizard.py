@@ -1664,7 +1664,6 @@ def build_config_md(spec):
     lines.append("")
     branches = spec.get("git_branches") or {}
     lines.append(f"- **Working Branch**: {branches.get('working', 'main')}")
-    lines.append(f"- **State Branch**: {branches.get('state', 'squid-squad')}")
     lines.append("")
 
     # --- ## Forge Backend ---
@@ -2506,11 +2505,11 @@ def upgrade_install(base_dir=None):
     # means an unreadable or malformed state file, or a state collision, is detected
     # at the partial-mismatch step rather than after dirs+config have been renamed —
     # which would let the next-run idempotency check silently mask the problem.
-    state_path = squid / ".harness-state.json"
+    harness_state_file = squid / ".harness-state.json"
     state = None
-    if state_path.exists():
+    if harness_state_file.exists():
         try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state = json.loads(harness_state_file.read_text(encoding="utf-8"))
         except OSError as exc:
             msg = f"partial migration detected: .harness-state.json unreadable ({exc}); manual intervention required"
             print(msg, file=sys.stderr)
@@ -2598,11 +2597,11 @@ def upgrade_install(base_dir=None):
             migrated.append(".harness-state.json: agents.dev -> agents.worker")
         if changed:
             state["agents"] = agents
-            tmp_state = state_path.with_suffix(".json.tmp")
+            tmp_state = harness_state_file.with_suffix(".json.tmp")
             tmp_state.write_text(
                 json.dumps(state, indent=2) + "\n", encoding="utf-8"
             )
-            tmp_state.replace(state_path)
+            tmp_state.replace(harness_state_file)
 
     summary_str = (
         "upgrade: migrated — " + ", ".join(migrated)
@@ -3926,7 +3925,6 @@ def generate_default_spec(scan_data=None, repo_info=None, target_dir=None):
         },
         "git_branches": {
             "working": "main",
-            "state": "squid-squad",
         },
         "forge_backend": {
             "provider": "github",

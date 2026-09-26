@@ -228,7 +228,7 @@ class TestCounters:
         from contextlib import ExitStack
         stack = ExitStack()
         stack.enter_context(patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path))
-        stack.enter_context(patch.object(cycle, "_state_path", lambda rel: tmp_path / rel))
+        stack.enter_context(patch.object(cycle, "_squid_path", lambda rel: tmp_path / rel))
         return stack
 
     def test_get_counter(self, tmp_path, capsys):
@@ -311,7 +311,7 @@ class TestLogIteration:
         role_dir = tmp_path / "skill" / "iterations"
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
              patch.object(cycle, "REPO_ROOT", tmp_path.parent), \
-             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
+             patch.object(cycle, "_squid_path", lambda rel: tmp_path / rel):
             path = cycle.log_iteration("skill", 5, bugs="#42", features="none",
                                        tests="all pass", notes="test note")
         log = Path(path)
@@ -326,7 +326,7 @@ class TestLogIteration:
     def test_new_param_names(self, mock_now, tmp_path, capsys):
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
              patch.object(cycle, "REPO_ROOT", tmp_path.parent), \
-             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
+             patch.object(cycle, "_squid_path", lambda rel: tmp_path / rel):
             path = cycle.log_iteration("skill", 1, issues="#100", tasks="#200")
         content = Path(path).read_text()
         assert "#100" in content
@@ -345,7 +345,7 @@ class TestCleanupIterations:
             os.utime(f, (time.time() - (25 - i), time.time() - (25 - i)))
 
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
-             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
+             patch.object(cycle, "_squid_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill", keep=20)
         assert removed == 5
         remaining = list(iter_dir.glob("iter-*.md"))
@@ -358,13 +358,13 @@ class TestCleanupIterations:
             (iter_dir / f"iter-{i}.md").write_text(f"iter {i}")
 
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
-             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
+             patch.object(cycle, "_squid_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill", keep=20)
         assert removed == 0
 
     def test_missing_dir_returns_zero(self, tmp_path):
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
-             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
+             patch.object(cycle, "_squid_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill")
         assert removed == 0
 

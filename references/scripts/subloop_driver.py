@@ -87,7 +87,7 @@ def cooldown_minutes():
 # State I/O
 # --------------------------------------------------------------------------
 
-def _state_path(alias):
+def _driver_file(alias):
     return REPO_ROOT / ".squidsquad" / alias / ".subloop-driver.json"
 
 
@@ -100,7 +100,7 @@ def read_state(alias):
     field is coerced to its expected type, and any coercion failure falls the
     whole state back to the default rather than crashing a downstream caller.
     """
-    path = _state_path(alias)
+    path = _driver_file(alias)
     if not path.exists():
         return dict(_DEFAULT_STATE)
     try:
@@ -133,7 +133,7 @@ def read_state(alias):
 
 
 def write_state(alias, state):
-    path = _state_path(alias)
+    path = _driver_file(alias)
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(path, json.dumps(state, indent=2) + "\n")
 

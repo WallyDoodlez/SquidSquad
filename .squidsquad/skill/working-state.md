@@ -1,16 +1,17 @@
 # Working State
 
-- **Task**: none. Updated 2026-09-26 (session after the deploy-signal respawn).
-- Pending-test (verifier): #13861 (PR #14138, vault-v2 P5), #14124 + #14125 (PR #14134, re-submitted after the merge-conflict fix).
-- SHIPPED this session: #14109 (PR #14111). Filed #14135 (the staleness gate on main); qa fixed it on main (98d872817).
+- **Task**: 14144 (in-progress, branch squidsquad/task/14144): retire the state branch + worktree. Code is complete and committed (3e536335e), and the static gate PASSES (6556/0) on the committed tree. Waiting on the Sonnet review (DeepSeek returned 402, filed #14148). Next: dispositions, push, PR, pending-test. config.md State Branch line already removed on main.
+- After the #14144 merge: `git rm --cached .squidsquad/diagnostics/diagnostic.lock` on main (it is gitignored by the PR).
+- #13862: pending-human-review (M3 operator gate). The manifest is on main at .squidsquad/skill/planning/13862-m2/ (186 entries incl. the post-M0 note). Tooling PR #14145 is on HOLD. Vault writes are FROZEN (Writes Per Cycle 0) until M4. On approval: rebuild from current main, run M1 + apply, reconcile (185 M0 + 1 post-M0), then pending-test.
+- SHIPPED this session: #14109, #14124, #14125, #13861.
 
 ## Queue after
-- Approved: #13862 M-track (vault migration M0-M4; M3 is a human gate), #10690, #10686.
-- Open: #14131 + #14132 (harness health-poller, one PR; #14131 plan is on the issue), #14127, #14114 (now unblocked, #14109 merged), #14137, #14136, #14133, #14130, #14128.
+- #14147 (verifier pending-test scans hardcode the skill alias; low, instructions), #14131 + #14132 (harness health-poller, one PR), #14127, #14114, #14137, #14136, #14133, #14130, #14128. Approved: #10690, #10686.
 
 ## Notes
-- gh active account Naahtec is pull-only: push with a `gh auth token --user WallyDoodlez` credential helper; for gh calls use git_ops/tracker (pinned GH_TOKEN). git_ops.py push fails when a task branch's upstream is origin/main, so push explicitly to `HEAD:refs/heads/<branch>`.
-- task-begin carries dirty main-only state (the telemetry shard, composed CLAUDE.md) into a DU conflict. Back up the shard and remove it before switching; afterwards, re-append events deduped by id.
+- Push with the `gh auth token --user WallyDoodlez` credential helper to `HEAD:refs/heads/<branch>`. git_ops push fails when the upstream is origin/main.
+- Run the static gate and staleness refresh only on the COMMITTED tree (memory: feedback_static_gate_on_committed_tree).
+- Heredocs mangle backslashes: use Write/Edit for any content with \n.
 
 ## Improvement Scan
 Status: idle. Last scan 2026-07-19 05:52.

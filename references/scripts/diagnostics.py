@@ -67,7 +67,7 @@ def _redact_entry(obj):
         return [_redact_entry(v) for v in obj]
     return obj
 
-# Import config reader and state_bus path resolution (#3664)
+# Import config reader
 sys.path.insert(0, str(SCRIPT_DIR))
 try:
     from config import get_field, _read_config
@@ -79,11 +79,7 @@ except ImportError:
 
 from shared_fs import atomic_write_text  # #10007
 
-try:
-    from state_bus import state_path as _state_path
-    DIAGNOSTICS_DIR = _state_path("diagnostics")
-except ImportError:
-    DIAGNOSTICS_DIR = REPO_ROOT / ".squidsquad" / "diagnostics"
+DIAGNOSTICS_DIR = REPO_ROOT / ".squidsquad" / "diagnostics"  # #14144: single location
 LOG_FILE = DIAGNOSTICS_DIR / "diagnostic.jsonl"
 
 

@@ -21,6 +21,7 @@
 .squidsquad/.event-state.json
 .squidsquad/.event-state.json.tmp
 .squidsquad/diagnostics/*.jsonl
+.squidsquad/diagnostics/*.lock
 .squidsquad/*/cycle-input.json
 .squidsquad/*/cycle-output.json
 .squidsquad/.harness-port
@@ -61,6 +62,7 @@ references/scripts/migrate_*.py.bak
 *.stackdump
 
 .squidsquad-state/
+.squidsquad/backups/
 .squidsquad/.harness-state.json
 
 # Per-task DS review tmp files (created by model_router code-review)
