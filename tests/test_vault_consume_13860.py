@@ -535,6 +535,27 @@ class TestIntakeInjection:
         assert calls["search"] == ("pm", 77, ("git",), vc.INTAKE_TOP)
         assert calls["edit"][0] == 77 and calls["edit"][1] == "Body\n\n" + section
 
+    def test_inject_view_failure_writes_no_impressions(self, tmp_path, monkeypatch):
+        # #14133: a failed gh issue view must not leave impression telemetry
+        # behind (the search is what writes it), so it must never run.
+        searched = []
+        tele = tmp_path / ".telemetry"
+        monkeypatch.setattr(vc, "VAULT_DIR", tmp_path)
+
+        def fake_search(*a, **k):
+            searched.append(a)
+            tele.mkdir(exist_ok=True)
+            (tele / "s.jsonl").write_text('{"event":"impression"}\n')
+            return self.PAYLOAD, None
+
+        with pytest.raises(RuntimeError, match="view"):
+            vc.inject_context(99999, "pm", tags=["x"], search_fn=fake_search,
+                              view_fn=lambda n: MagicMock(returncode=1, stdout="",
+                                                          stderr="not found"),
+                              edit_fn=lambda n, b: pytest.fail("edit after failed view"))
+        assert searched == []
+        assert not tele.exists()
+
     def test_inject_raises_when_edit_fails(self):
         with pytest.raises(RuntimeError, match="edit"):
             vc.inject_context(1, "pm", tags=["x"],

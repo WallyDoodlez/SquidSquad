@@ -454,12 +454,16 @@ def inject_context(n, alias, entities=(), tags=(), terms=(),
     """Search the vault for issue <n> (impressions attributed to <n>) and write
     the ``## Vault context`` section into its body. Returns the section."""
     search_fn, view_fn, edit_fn = search_fn or search, view_fn or _gh_view_body, edit_fn or _gh_edit_body
-    payload, reason = search_fn(alias, n, entities, tags, terms, top=INTAKE_TOP)
-    searched = ", ".join([*entities, *tags, *terms])
-    section = render_context_section(payload, reason, searched)
+    # #14133: read the body BEFORE searching. The search writes impression
+    # events, so a view failure after it left impressions for context nobody
+    # was shown (breaking INTAKE_TOP's shown == impressed), and a retry
+    # double-counted them.
     res = view_fn(n)
     if res.returncode != 0:
         raise RuntimeError(f"gh issue view #{n} failed: {(res.stderr or '').strip()[:200]}")
+    payload, reason = search_fn(alias, n, entities, tags, terms, top=INTAKE_TOP)
+    searched = ", ".join([*entities, *tags, *terms])
+    section = render_context_section(payload, reason, searched)
     edit = edit_fn(n, replace_section(res.stdout, INTAKE_SECTION, section))
     if edit.returncode != 0:
         raise RuntimeError(f"gh issue edit #{n} failed: {(edit.stderr or '').strip()[:200]}")
