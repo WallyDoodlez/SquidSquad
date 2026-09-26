@@ -113,3 +113,17 @@
 {"id":"78a5d6ad-3956-474a-a830-7465b8a7dd65","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-migration-6274-cutover","counter":"impression"}
 {"id":"cb2cc919-0f39-46ef-b2fc-5ba64c1009cf","ts":"2026-09-26T20:46:37.415Z","agent":"skill","task":14127,"slug":"learning-atomic-migration-strategy","counter":"used"}
 {"id":"fda9f4fe-5087-486c-abd8-aea57ff45601","ts":"2026-09-26T20:46:37.416Z","agent":"skill","task":14127,"slug":"pattern-verify-new-shipped-file-in-installer-manifest","counter":"used"}
+{"id":"3659a08d-f30f-48a8-8920-fc3caa43f8fb","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"impression"}
+{"id":"7117eb2a-32eb-4f37-8de9-3811a99d453f","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-git-ops-helpers-pin-repo-root-not-cwd","counter":"impression"}
+{"id":"6c6583bf-e6fc-434b-96e3-995dd89399f7","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-default-port-fallback-is-live-egress-trap-in-tests","counter":"impression"}
+{"id":"8a3bc715-7892-488c-ba3e-e9ca2494cf45","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts","counter":"impression"}
+{"id":"f8f37f42-9e3a-4d22-a78a-7c033ce2ea62","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-harness-merge-gate-caches-git-ops-module","counter":"impression"}
+{"id":"945ece5a-3d2f-4066-88f4-2258ef696094","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-harness-pr-merge-does-not-sync-local-clone","counter":"impression"}
+{"id":"1b3099dc-02ec-486b-8f6d-291cd2374511","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-deploy-pull-block-divergence-recover-by-merge","counter":"impression"}
+{"id":"19d32ab0-87e5-4935-9946-6859ab63eb61","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-harness-only-ship-restart-required-is-noop","counter":"impression"}
+{"id":"9f9c3829-7934-44c7-8dda-9fd42786575c","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-deploy-signal-boot-drain-residual-vs-live","counter":"impression"}
+{"id":"d518dbaf-ee53-4919-a667-d6c7028fa3c3","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"harness","counter":"impression"}
+{"id":"669f2924-6610-4940-b45a-4e285192cc70","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"decision-harness-schedules-agent-judges","counter":"impression"}
+{"id":"cec2b607-f493-45e3-8563-54512a3662bc","ts":"2026-09-26T21:00:33.328Z","agent":"skill","task":14114,"slug":"learning-monitor-persistent-do-not-rearm-per-nudge","counter":"impression"}
+{"id":"4f91b40e-5255-4cd4-9240-d9692a8ef921","ts":"2026-09-26T21:00:54.671Z","agent":"skill","task":14114,"slug":"learning-default-port-fallback-is-live-egress-trap-in-tests","counter":"used"}
+{"id":"d823286c-514d-4173-9dc1-1ad556fcc96f","ts":"2026-09-26T21:00:54.671Z","agent":"skill","task":14114,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"used"}
