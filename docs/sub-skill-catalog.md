@@ -130,7 +130,7 @@ Reusable across multiple roles.
 | Sub-skill | One-liner | Used by |
 |---|---|---|
 | `vault-remember` | End-of-cycle reflection + worker capture-at-ship; writes to vault when something is worth remembering (4 gates; gate 2 = engine dedup, prefer-update-over-create) — every role contributes from its own lane | all roles |
-| `vault-optimize` | On quiet cycles, propose-only maintenance: engine-report pruning proposals + contradictions filed for human review, own-shard telemetry compaction (no auto-archive, no time decay) | PM, worker |
+| `vault-optimize` | Propose-only maintenance: on the harness-scheduled `vault-maintenance` event (pm), analyze the `last_optimized` queue — contradictions + engine-report pruning proposals filed as `pending` HITL tasks, queue stamped; on quiet cycles, own-shard telemetry compaction (no auto-archive, no time decay) | PM, worker |
 | `vault-protocol` | Full vault R/W protocol, engine-backed (raw-grep ban): search/cite via `vault_consume.py`, consumption steps + receipt formats, v2 note creation (incl. `rule-*` lane) — all roles write per their lane | all roles |
 
 ### Quality, git, improvement

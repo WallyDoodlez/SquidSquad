@@ -89,6 +89,10 @@ EXPECTED_CALLERS = {
     # work-assign CLI (the X-Squidsquad-Alias-bearing client). Operators may
     # also curl it for babysitting, but the canonical in-repo caller is tracker.
     ("POST", "/work/assign"):                   ["tracker"],
+    # #13861 — vault maintenance window: operator/verifier inspect + force
+    # (curl); the scheduled path is the in-process VaultMaintenanceScheduler.
+    ("GET", "/maintenance/vault-optimize"):     _EXTERNAL,
+    ("POST", "/maintenance/vault-optimize"):    _EXTERNAL,
 }
 
 

@@ -2,6 +2,8 @@
 .squidsquad/.active-role
 .squidsquad/.instance-id
 .squidsquad/.instance-id.tmp
+.squidsquad/.vault-maintenance.json
+.squidsquad/.vault-maintenance.json.tmp
 .squidsquad/*/current-state
 .squidsquad/*/.pid
 .squidsquad/*/.claude-pid

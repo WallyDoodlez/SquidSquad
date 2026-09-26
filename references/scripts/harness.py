@@ -695,6 +695,9 @@ class HarnessState:
         # squidsquad_version, git_sha, git_branch, git_dirty — see
         # compute_code_version(). Stays None until lifespan fills it.
         self.code_version = None
+        # #13861 (S5.2): this harness instance's telemetry-shard identity,
+        # minted/read at boot by _ensure_instance_id(). None until lifespan.
+        self.instance_id = None
         # #10681 (PRD-E E2): SHA256 hex of the composed source tree taken
         # at the end of the last successful compose. E1's boot-time
         # freshness check compares the live checksum against this; drift
@@ -2576,6 +2579,242 @@ def _distribute_local_config_to_clones() -> list | None:
 
 
 # ---------------------------------------------------------------------------
+# Instance identity (#13861, PRD-VAULT-V2 S5.2, VAULT-ARCH 6.3)
+# ---------------------------------------------------------------------------
+
+INSTANCE_ID_FILE = SQUIDSQUAD_DIR / ".instance-id"
+
+
+def _ensure_instance_id(path=None) -> str | None:
+    """Return this harness instance's UUID, minting it on first boot.
+
+    The id names the writer axis of the vault telemetry shards
+    (``<instance-id>-<alias>.jsonl``). It lives in this harness's own
+    gitignored ``.instance-id`` -- never hostname/username-derived (several
+    squads on one machine would collide) and never committed (every clone
+    would inherit one id). Mint-if-absent only, so it survives restarts; a
+    provision-time mint by the wizard is adopted as-is. ``None`` when the file
+    can neither be read nor written (clones then keep whatever they have).
+    """
+    path = Path(path) if path else INSTANCE_ID_FILE
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        existing = ""
+    if existing:
+        return existing
+    import uuid
+    new_id = str(uuid.uuid4())
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(new_id + "\n", encoding="utf-8")
+        tmp.replace(path)
+    except OSError as e:
+        _log(f"WARNING: could not persist instance id to {path}: {e}")
+        return None
+    return new_id
+
+
+def _distribute_instance_id_to_clones(instance_id) -> list | None:
+    """Point every agent clone's ``.squidsquad/.instance-id`` at this harness's id.
+
+    Agents read their shard identity from their own clone, so without this
+    each clone kept its P3 provisional per-clone id and the harness root clone
+    read ``unprovisioned``. A clone already carrying a different id is
+    re-pointed: its old ``<old-id>-<alias>.jsonl`` shard stays readable
+    (sum-at-read, VAULT-ARCH 6.3), it just stops growing.
+
+    Production-only, same guard and reason as ``_distribute_port_to_clones``
+    (#13352). Returns ``[(role, old_id_or_None), ...]`` for rewritten clones,
+    or ``None`` when skipped.
+    """
+    live_squid = REPO_ROOT / ".squidsquad"
+    try:
+        is_production = SQUIDSQUAD_DIR.resolve() == live_squid.resolve()
+    except OSError:
+        is_production = False
+    if not is_production:
+        _log(
+            "Isolated SQUIDSQUAD_DIR — skipping clone instance-id distribution "
+            "(#13352: test harnesses must not write into live clones)"
+        )
+        return None
+    rewritten = []
+    for role, clone_root in boot_remote._parse_local_config().items():
+        clone_squid = Path(clone_root) / ".squidsquad"
+        if not clone_squid.is_dir() or Path(clone_root).resolve() == REPO_ROOT.resolve():
+            continue
+        target = clone_squid / ".instance-id"
+        try:
+            old = target.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            old = None
+        if old == instance_id:
+            continue
+        try:
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_text(instance_id + "\n", encoding="utf-8")
+            tmp.replace(target)
+            rewritten.append((role, old))
+        except OSError as e:
+            _log(f"WARNING: could not write instance id to {target}: {e}")
+    return rewritten
+
+
+# ---------------------------------------------------------------------------
+# Vault maintenance window (#13861, PRD-VAULT-V2 S5.1, VAULT-ARCH 9.6)
+# ---------------------------------------------------------------------------
+#
+# The optimize analyze phase is harness-scheduled -- not "hope a quiet cycle
+# notices" (the v1 bug). Each window runs the deterministic queue selection
+# (`vault_optimize.py analyze-queue`: last_optimized missing or >= 14 days
+# old); a non-empty queue emits a `vault-maintenance` event to the pm alias,
+# whose vault-optimize sub-skill does the judgment (contradictions -> HITL
+# tasks, never applied). Judgment stays agent-side: the default model route
+# is Claude, reachable only from an agent session.
+
+VAULT_MAINTENANCE_STATE_FILE = SQUIDSQUAD_DIR / ".vault-maintenance.json"
+VAULT_MAINTENANCE_CHECK_INTERVAL = 600  # seconds between due-checks
+VAULT_MAINTENANCE_INITIAL_DELAY = 300  # let boot/respawn churn settle first
+VAULT_OPTIMIZE_INTERVAL_HOURS_DEFAULT = 24
+VAULT_OPTIMIZE_CUTOFF_DAYS = 14  # VAULT-ARCH 7.3 / 9.6
+_vault_maintenance_lock = threading.Lock()
+
+
+def _vault_optimize_interval_hours() -> float:
+    """``Vault Optimize > Interval Hours`` from config.md; the default when the
+    section is absent or unparseable (existing installs carry no such key)."""
+    try:
+        import config as _cfg
+        hours = float(_cfg.get_field("vault-optimize-interval-hours"))
+        if hours > 0:
+            return hours
+    except (SystemExit, Exception):
+        pass
+    return float(VAULT_OPTIMIZE_INTERVAL_HOURS_DEFAULT)
+
+
+def _read_vault_maintenance_state() -> dict:
+    try:
+        data = json.loads(VAULT_MAINTENANCE_STATE_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_vault_maintenance_state(data: dict) -> None:
+    try:
+        tmp = VAULT_MAINTENANCE_STATE_FILE.with_name(
+            VAULT_MAINTENANCE_STATE_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(VAULT_MAINTENANCE_STATE_FILE)
+    except OSError as e:
+        _log(f"WARNING: could not persist vault maintenance state: {e}")
+
+
+def _vault_maintenance_next_due(state_data=None) -> float:
+    """Epoch at which the next window is due (0 = never run -> due now)."""
+    data = state_data if state_data is not None else _read_vault_maintenance_state()
+    last = data.get("last_window_at")
+    if not isinstance(last, (int, float)):
+        return 0.0
+    return last + _vault_optimize_interval_hours() * 3600
+
+
+def run_vault_maintenance_window(force=False, now=None) -> dict:
+    """Run one maintenance window if due (or ``force``). Returns the result
+    that is also persisted as ``last_result``.
+
+    Any completed attempt -- including an analyze-queue failure -- advances
+    ``last_window_at``, so a broken vault retries next interval instead of
+    every check tick; the failure is kept in ``last_result`` and logged.
+    Serialized: the scheduler thread and the force endpoint never overlap.
+    """
+    with _vault_maintenance_lock:
+        now = time.time() if now is None else now
+        data = _read_vault_maintenance_state()
+        if not force and now < _vault_maintenance_next_due(data):
+            return {"ran": False, "reason": "not due",
+                    "next_due_at": _vault_maintenance_next_due(data)}
+        result = {"ran": True, "at": now, "forced": bool(force), "emitted": None}
+        proc = None
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(SCRIPT_DIR / "vault_optimize.py"),
+                 "analyze-queue", "--cutoff-days", str(VAULT_OPTIMIZE_CUTOFF_DAYS)],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=120, cwd=str(REPO_ROOT),
+            )
+            queue = json.loads(proc.stdout) if proc.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
+            queue = None
+            result["error"] = f"analyze-queue failed: {e}"
+        if queue is None:
+            result.setdefault("error", "analyze-queue exited "
+                              f"{proc.returncode if proc else '?'}: "
+                              f"{((proc.stderr if proc else '') or '').strip()[:200]}")
+            _log(f"Vault maintenance window: {result['error']}")
+        else:
+            result["total_due"] = queue.get("total_due", 0)
+            result["queued"] = len(queue.get("queue", []))
+            if result["queued"]:
+                pm_alias = ExternalActivityDetector._alias_for_role_class("pm")
+                event = _emit_event("vault-maintenance", "harness", payload={
+                    "target_alias": pm_alias,
+                    "event_context": "vault-maintenance",
+                    "total_due": result["total_due"],
+                    "queued": result["queued"],
+                    "cutoff_days": VAULT_OPTIMIZE_CUTOFF_DAYS,
+                })
+                result["emitted"] = {"event_id": event["id"], "target_alias": pm_alias}
+                _log(f"Vault maintenance window: {result['total_due']} note(s) due "
+                     f"-> vault-maintenance event to {pm_alias}")
+            else:
+                _log("Vault maintenance window: no notes due -- nothing to analyze")
+        data["last_window_at"] = now
+        data["last_result"] = result
+        _write_vault_maintenance_state(data)
+        return result
+
+
+class VaultMaintenanceScheduler:
+    """Daemon thread that opens a maintenance window whenever one is due."""
+
+    def __init__(self):
+        self._running = False
+        self._thread = None
+        self._stop = threading.Event()
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._loop, daemon=True, name="vault-maintenance")
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+        self._stop.set()
+
+    def _loop(self):
+        if self._stop.wait(VAULT_MAINTENANCE_INITIAL_DELAY):
+            return
+        while self._running:
+            try:
+                run_vault_maintenance_window()
+            except Exception as e:  # noqa: BLE001 — never kill the thread
+                _log(f"WARNING: vault maintenance window raised {e!r}")
+            if self._stop.wait(VAULT_MAINTENANCE_CHECK_INTERVAL):
+                return
+
+
+vault_maintenance = VaultMaintenanceScheduler()
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -2603,6 +2842,12 @@ async def lifespan(app: FastAPI):
             f"origin/{cv['git_branch']} -- this relaunch may not include "
             f"recently shipped fixes (#13531)"
         )
+
+    # #13861 (S5.2, VAULT-ARCH 6.3): mint-if-absent the instance id. Cheap
+    # local file I/O, so it runs synchronously -- /status reports it from the
+    # first request, and _deferred_init distributes it before auto-start.
+    state.instance_id = _ensure_instance_id()
+    _log(f"Instance id: {state.instance_id or 'UNAVAILABLE (could not persist)'}")
 
     # --- Verify agent clones ---
     _log("Verifying agent clones...")
@@ -2659,6 +2904,15 @@ async def lifespan(app: FastAPI):
                 _log(f"Re-synced stale .local-config: {cfg}")
         except (SystemExit, Exception) as e:
             _log(f"WARNING: Could not re-sync .local-config to clones: {e}")
+
+        # Point each clone's shard identity at this harness's id (#13861 S5.2)
+        # -- before auto-start, so fresh sessions write the right shard.
+        if state.instance_id:
+            try:
+                for role, old in _distribute_instance_id_to_clones(state.instance_id) or ():
+                    _log(f"Instance id distributed to {role} clone (was {old or 'unset'})")
+            except (SystemExit, Exception) as e:
+                _log(f"WARNING: Could not distribute instance id to clones: {e}")
 
         event_lifecycle.load()
         activity_detector.start()
@@ -2806,11 +3060,14 @@ async def lifespan(app: FastAPI):
     # priorities (poller is the canonical liveness signal; the
     # file-watcher is best-effort and may degrade if watchdog is missing).
     state.start_l4_watcher()
+    # #13861 (S5.1): harness-scheduled vault-optimize analyze window.
+    vault_maintenance.start()
 
     yield
 
     # Shutdown
     _log("Shutting down...")
+    vault_maintenance.stop()
     state.stop_l4_watcher()
     state.stop_poller()
 
@@ -2973,9 +3230,30 @@ async def get_status():
             "uptime_seconds": uptime,
             "uptime_human": f"{uptime // 3600}h {(uptime % 3600) // 60}m {uptime % 60}s",
             "code_version": code_version,
+            "instance_id": state.instance_id,  # #13861 S5.2
         },
         "agents": state.all_agents(),
     }
+
+
+@app.get("/maintenance/vault-optimize")
+async def get_vault_maintenance():
+    """Vault maintenance window state (#13861 S5.1): last window + next due."""
+    data = await asyncio.to_thread(_read_vault_maintenance_state)
+    return {
+        "interval_hours": _vault_optimize_interval_hours(),
+        "cutoff_days": VAULT_OPTIMIZE_CUTOFF_DAYS,
+        "last_window_at": data.get("last_window_at"),
+        "next_due_at": _vault_maintenance_next_due(data),
+        "last_result": data.get("last_result"),
+    }
+
+
+@app.post("/maintenance/vault-optimize")
+async def post_vault_maintenance():
+    """Force a vault maintenance window now (#13861 S5.1) -- operator or
+    verifier trigger; the scheduler's cadence restarts from this window."""
+    return await asyncio.to_thread(run_vault_maintenance_window, True)
 
 
 @app.get("/")
