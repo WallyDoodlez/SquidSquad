@@ -213,9 +213,12 @@ def render_local_config_for(target_root, clone_map) -> str:
     """Render .local-config text for the clone at ``target_root``.
 
     ``clone_map`` is {role: absolute clone root} in the order to write.
-    Each entry is written relative to ``target_root`` (so the target's own
-    role reads ``.``). When no relative path exists (different Windows
-    drive), the entry is written absolute. Forward slashes throughout.
+    Each entry is written relative to ``target_root``. The target's own role
+    is written sibling-relative (``../<its dir>``), not ``.``: health_check.py
+    (#13742) treats a raw ``.`` on a non-pm role as stale by construction and
+    only ground-truths a self entry written sibling-relative. When no
+    relative path exists (different Windows drive), the entry is written
+    absolute. Forward slashes throughout.
     """
     target = Path(target_root).resolve()
     lines = [
@@ -231,6 +234,8 @@ def render_local_config_for(target_root, clone_map) -> str:
             rel = os.path.relpath(root, target)
         except ValueError:  # different drive on Windows
             rel = str(root)
+        if rel == "." and target.name:
+            rel = f"../{target.name}"
         lines.append(f"- **{role}**: {rel.replace(os.sep, '/')}")
     return "\n".join(lines) + "\n"
 
@@ -241,7 +246,8 @@ def sync_local_config_to_clones(clone_map, skip_roots=()) -> list:
     Only clones whose ``.squidsquad/`` exists are written; roots in
     ``skip_roots`` (e.g. the source clone itself) are left alone. A file whose
     parsed entries already resolve to ``clone_map`` is not rewritten, so a
-    healthy fleet sees no churn. Writes are atomic (tmp + replace).
+    healthy fleet sees no churn. Writes are atomic (tmp + replace); a clone
+    that cannot be written is warned about on stderr and skipped.
 
     Returns the list of .local-config paths that were rewritten (drift fixed).
     """
@@ -257,11 +263,30 @@ def sync_local_config_to_clones(clone_map, skip_roots=()) -> list:
         if not squid.is_dir():
             continue
         cfg = squid / ".local-config"
-        if _resolved_entries(cfg, root) == want:
+        have = _resolved_entries(cfg, root)
+        if have == want:
             continue
-        tmp = cfg.with_name(".local-config.tmp")
-        tmp.write_text(render_local_config_for(root, want), encoding="utf-8")
-        tmp.replace(cfg)
+        dropped = sorted(set(have or ()) - set(want))
+        if dropped:
+            print(f"WARNING: .local-config re-sync drops role(s) {dropped} from "
+                  f"{cfg} -- not in the authoritative map (#14095)",
+                  file=sys.stderr)
+        # One bad clone (locked file, offline path) must not block the rest,
+        # as in the harness's port distribution.
+        tmp = None
+        try:
+            # Unique tmp name: the harness boot sync and an operator's
+            # add_role run may target the same clone concurrently.
+            fd, tmp = tempfile.mkstemp(dir=squid, prefix=".local-config.",
+                                       suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+                f.write(render_local_config_for(root, want))
+            os.replace(tmp, cfg)
+        except OSError as e:
+            if tmp:
+                Path(tmp).unlink(missing_ok=True)
+            print(f"WARNING: could not re-sync {cfg}: {e}", file=sys.stderr)
+            continue
         rewritten.append(cfg)
     return rewritten
 
@@ -269,11 +294,12 @@ def sync_local_config_to_clones(clone_map, skip_roots=()) -> list:
 def _resolved_entries(cfg, clone_root) -> dict | None:
     """Parse ``cfg`` into {role: resolved Path}, relative to ``clone_root``.
 
-    Returns None when the file is missing or unreadable.
+    Returns None when the file is missing or unreadable (incl. not UTF-8),
+    so the caller rewrites it.
     """
     try:
         text = Path(cfg).read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     result = {}
     for line in text.splitlines():

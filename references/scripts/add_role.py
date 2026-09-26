@@ -411,7 +411,9 @@ def list_clones():
         return
     for role in sorted(agents_map):
         path = agents_map[role]
-        exists = Path(path).exists()
+        p = Path(path)
+        # Relative entries resolve against the repo root, not the cwd (#14095).
+        exists = (p if p.is_absolute() else REPO_ROOT / p).exists()
         status = "OK" if exists else "MISSING"
         print(f"  {role}: {path} [{status}]")
 

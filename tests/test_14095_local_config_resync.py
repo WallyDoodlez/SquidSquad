@@ -59,10 +59,13 @@ def resolved(roots: dict) -> dict:
 
 
 class TestRender:
-    def test_self_is_dot_and_siblings_relative(self, tmp_path):
+    def test_self_is_sibling_relative_and_siblings_relative(self, tmp_path):
+        """Self is written '../<dir>', never '.': health_check's #13742
+        exemption treats raw '.' on a non-pm role as stale."""
         roots = make_fleet(tmp_path)
         text = boot_remote.render_local_config_for(roots["qa"], roots)
-        assert "- **qa**: .\n" in text
+        assert "- **qa**: ../Proj-qa\n" in text
+        assert ": .\n" not in text
         assert "- **pm**: ../Proj\n" in text
         assert "- **skill**: ../Proj-2\n" in text
         assert "\\" not in text.split("\n", 5)[-1], "forward slashes only"
@@ -139,7 +142,55 @@ class TestSync:
         roots = make_fleet(tmp_path)
         boot_remote.sync_local_config_to_clones(roots)
         for r in roots.values():
-            assert not (r / ".squidsquad" / ".local-config.tmp").exists()
+            assert list((r / ".squidsquad").glob(".local-config*.tmp")) == []
+
+    def test_unwritable_clone_does_not_block_the_rest(self, tmp_path, capsys):
+        roots = make_fleet(tmp_path)
+        real_replace = os.replace
+        bad = roots["skill"] / ".squidsquad" / ".local-config"
+
+        def flaky(src, dst):
+            if Path(dst) == bad:
+                raise PermissionError("locked by a reader")
+            return real_replace(src, dst)
+
+        with patch.object(boot_remote.os, "replace", side_effect=flaky):
+            rewritten = boot_remote.sync_local_config_to_clones(roots)
+        assert bad not in rewritten
+        assert "could not re-sync" in capsys.readouterr().err
+        assert list((roots["skill"] / ".squidsquad").glob("*.tmp")) == []
+        for role in ("pm", "qa", "dm"):
+            assert entries(roots[role]) == resolved(roots)
+
+    def test_dropped_roles_are_warned(self, tmp_path, capsys):
+        roots = make_fleet(tmp_path)
+        write_cfg(roots["dm"], {"pm": "../Proj", "ghost": "../Proj-ghost"})
+        boot_remote.sync_local_config_to_clones(roots)
+        assert "ghost" in capsys.readouterr().err
+        assert "ghost" not in entries(roots["dm"])
+
+    def test_concurrent_writers_tmp_file_untouched(self, tmp_path):
+        """Review fix: a fixed tmp name let two concurrent syncs (harness boot
+        + add_role) consume each other's tmp file. Another writer's in-flight
+        tmp must be neither reused nor removed."""
+        roots = make_fleet(tmp_path)
+        other = roots["qa"] / ".squidsquad" / ".local-config.tmp"
+        other.write_text("in-flight", encoding="utf-8")
+        boot_remote.sync_local_config_to_clones(roots)
+        assert other.read_text(encoding="utf-8") == "in-flight"
+        assert entries(roots["qa"]) == resolved(roots)
+
+    def test_non_utf8_file_is_rewritten_not_fatal(self, tmp_path):
+        """Review fix: a cp1252-saved file raised UnicodeDecodeError and
+        aborted the whole fleet sync; now it is treated as unreadable and
+        rewritten, and later clones still get synced."""
+        roots = make_fleet(tmp_path)
+        (roots["skill"] / ".squidsquad" / ".local-config").write_bytes(
+            b"- **pm**: caf\xe9\x9d\n")
+        rewritten = boot_remote.sync_local_config_to_clones(roots)
+        assert roots["skill"] / ".squidsquad" / ".local-config" in rewritten
+        for r in roots.values():
+            assert entries(r) == resolved(roots)
 
 
 class TestHarnessWiring:
@@ -188,3 +239,39 @@ class TestAddRoleSync:
         with patch.object(add_role, "REPO_ROOT", roots["pm"]):
             add_role._sync_local_config({k: str(v) for k, v in roots.items()})
         assert entries(roots["qa"]) == resolved(roots)
+
+    def test_list_clones_resolves_relative_against_repo_root(
+            self, tmp_path, monkeypatch, capsys):
+        """Review fix: the synced primary file holds relative entries, so
+        --list must resolve them against REPO_ROOT, not the cwd."""
+        roots = make_fleet(tmp_path)
+        cfg = roots["pm"] / ".squidsquad" / ".local-config"
+        cfg.write_text(boot_remote.render_local_config_for(roots["pm"], roots),
+                       encoding="utf-8")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        with patch.object(add_role, "REPO_ROOT", roots["pm"]),              patch.object(add_role, "LOCAL_CONFIG", cfg):
+            add_role.list_clones()
+        out = capsys.readouterr().out
+        assert "MISSING" not in out
+        assert out.count("[OK]") == 4
+
+
+class TestHealthCheckIntegration:
+    def test_synced_clone_reads_all_agents_without_collision(self, tmp_path):
+        """health_check.py run from a synced sibling clone sees no collision,
+        and the clone's own entry is not raw '.', so the #13742 exemption
+        ground-truths it even if another role's entry later breaks onto the
+        same path."""
+        import health_check
+        roots = make_fleet(tmp_path)
+        boot_remote.sync_local_config_to_clones(roots)
+        cfg = roots["qa"] / ".squidsquad" / ".local-config"
+        with patch.object(health_check, "REPO_ROOT", roots["qa"]), \
+             patch.object(health_check, "LOCAL_CONFIG", cfg):
+            parsed = health_check._parse_local_config()
+            raw = dict(health_check._LAST_PARSED_RAW)
+        assert parsed == resolved(roots)
+        assert len(set(parsed.values())) == 4, "no two roles collide"
+        assert raw["qa"] != "."
