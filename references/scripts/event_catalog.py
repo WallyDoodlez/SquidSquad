@@ -122,9 +122,9 @@ EMITTED = {
     # window found vault notes due for an optimize analyze pass (last_optimized
     # missing or >= 14 days old). pm's vault-optimize sub-skill reacts.
     "vault-maintenance": {
-        "description": "Harness-scheduled vault maintenance window: notes are due for an optimize analyze pass. pm runs the vault-optimize sub-skill (contradictions -> pending HITL tasks, never applied; pruning review; last_optimized stamp).",
+        "description": "Harness-scheduled vault maintenance window: notes are due for an optimize analyze pass (queued > 0) and/or vault-synthesis is due (synthesis_due, at most weekly, #14137). pm runs the vault-optimize sub-skill for queued notes (contradictions -> pending HITL tasks, never applied; pruning review; last_optimized stamp) and the vault-synthesis sub-skill when synthesis_due.",
         "source": "harness.py run_vault_maintenance_window",
-        "payload_fields": ["target_alias", "event_context", "total_due", "queued", "cutoff_days"],
+        "payload_fields": ["target_alias", "event_context", "total_due", "queued", "cutoff_days", "synthesis_due"],
     },
 }
 

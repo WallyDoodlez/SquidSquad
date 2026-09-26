@@ -421,12 +421,15 @@ class TestMaintenanceWindow:
 
     def test_empty_queue_emits_nothing_but_advances(self, window):
         window["queue"] = {"queue": [], "total_due": 0}
+        # #14137: synthesis signalled recently -> not due, so nothing to emit.
+        harness._write_vault_maintenance_state({"last_synthesis_signal_at": 4.0})
         out = harness.run_vault_maintenance_window(now=5.0)
         assert out["ran"] and out["emitted"] is None and window["emitted"] == []
         assert harness._read_vault_maintenance_state()["last_window_at"] == 5.0
 
     def test_analyze_failure_recorded_and_retried_next_interval(self, window):
         window["rc"] = 1
+        harness._write_vault_maintenance_state({"last_synthesis_signal_at": 4.0})  # #14137
         out = harness.run_vault_maintenance_window(now=5.0)
         assert "analyze-queue exited 1" in out["error"] and window["emitted"] == []
         assert harness._read_vault_maintenance_state()["last_window_at"] == 5.0

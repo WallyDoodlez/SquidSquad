@@ -4,13 +4,13 @@ ordinal: 20
 roles: [pm]
 ---
 
-### Step — Vault Synthesis (Quiet Cycle)
+### Step — Vault Synthesis (Harness-Scheduled)
 
-During quiet cycles, synthesize cross-agent vault knowledge into posture notes. This step runs AFTER vault optimize — if vault optimize ran this cycle, synthesis still runs (they serve different purposes).
+Synthesize cross-agent vault knowledge into posture notes. When the same event also queued notes for vault optimize, run optimize first, then synthesis (they serve different purposes).
 
-**Activation**: Maintain a **synthesis cycle counter** in working state (separate from the improvement scan counter). Increment each quiet cycle. **After 5 consecutive quiet cycles**, trigger synthesis. Reset the counter when:
-- Real work occurs (issue fix, task progress, verification)
-- A synthesis completes (reset to 0, must accumulate 5 more quiet cycles)
+**Activation (#14137)**: run this step only when a `vault-maintenance` event arrives with `synthesis_due: true` in its payload. The harness sends that at most once a week (config `Vault Optimize > Synthesis Interval Days`, never below 7). You do not count quiet cycles or keep any synthesis counter; the harness schedules, and the gates below still decide whether anything is written. With the harness unreachable (loop mode) there is no window, so synthesis waits until event mode returns.
+
+**Vault write freeze**: if `python references/scripts/config.py get vault-writes-per-cycle` returns `0` (the #13862 M0–M4 freeze), run Steps 1–3 as normal, then in Step 4 make **no vault writes**: skip creating or updating the posture note and the vault checks, and put the full drafted posture in the review task body instead, so it can be written after approval once the freeze lifts. Steps 4.2 (review task) and 5 (sentinel + log line) still run.
 
 **Vault size gate**: Only run when the vault has 10+ galaxy notes. If fewer, skip — not enough data to synthesize.
 
