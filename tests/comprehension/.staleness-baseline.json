@@ -49,7 +49,7 @@
  },
  "12800_spec.json": {},
  "12818_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "48d46f4e6ef81e4491cfef3814d50082a2c4640d"
+  ".squidsquad/pm/CLAUDE.md": "25907bcad5f3c6394ed45bc50e5aec69fee4c343"
  },
  "12825_spec.json": {
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
@@ -169,6 +169,11 @@
  "13858_spec.json": {
   "references/sub-skills/common/vault-protocol.md": "750f4af293218935ae81adfc1c9bfe281b3d1156"
  },
+ "14099_spec.json": {
+  "docs/AGENT-RUNTIME.md": "f68bb00c071daa36a39d916437af00b4cbe38cb9",
+  "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883",
+  "references/sub-skills/common-events/event-mode-contract.md": "94bd9146456fba15cd7dd1389854454329aef541"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
@@ -210,7 +215,7 @@
   "tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md": "b4c02ca4eaf7d3f370533052128c2eaea0d4e4af"
  },
  "9184_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "48d46f4e6ef81e4491cfef3814d50082a2c4640d",
+  ".squidsquad/pm/CLAUDE.md": "25907bcad5f3c6394ed45bc50e5aec69fee4c343",
   ".squidsquad/qa/CLAUDE.md": "047981dd6aaa3338360e0b38a60b4e38ee4dad94",
   ".squidsquad/skill/CLAUDE.md": "f6a040277df3cd9338880e02e089c70283c6a962",
   "references/sub-skills/roles/pm/task-intake.md": "70fe77ac004801a82ddfe7dd7785f0db394a6607"
