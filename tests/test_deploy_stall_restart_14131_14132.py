@@ -151,6 +151,7 @@ class TestLiveDeployStallPoller:
         release = threading.Event()
         seq = mock.Mock(side_effect=lambda *a, **k: release.wait(5))
         with mock.patch("harness._run_deploy_sequence", seq), \
+             mock.patch("harness.state", hs), \
              mock.patch.object(harness.event_stream, "get_all",
                                return_value=[sig]):
             _poll(hs, self.NOW, alive=True)
@@ -178,6 +179,52 @@ class TestLiveDeployStallPoller:
         assert errs[0].args[1] == "pm"
         assert payload["failed_role"] == "skill"
         assert payload["stage"] == "halt-timeout"
+
+    def test_no_auto_reboot_degrades_recovery_to_surface(self):
+        """DS F2: recovery kills + respawns, so under the no-auto-reboot hatch
+        it is only surfaced (once), never started."""
+        hs = HarnessState()
+        hs.set_agent("skill", _deploying_agent(self.NOW, WINDOW + 120))
+        seq = mock.Mock()
+        with mock.patch("harness._run_deploy_sequence", seq), \
+             mock.patch("harness.state", hs), \
+             mock.patch("harness._NO_AUTO_REBOOT", True), \
+             mock.patch("harness._emit_event") as emit:
+            _poll(hs, self.NOW, alive=True)
+            _poll(hs, self.NOW + 5, alive=True)
+        seq.assert_not_called()
+        assert len([c for c in emit.call_args_list
+                    if c.args[0] == "deploy-error"]) == 1
+
+    def test_compose_freshness_failed_degrades_recovery_to_surface(self):
+        """DS F2: a red E1 freshness gate refuses every spawn path."""
+        hs = HarnessState()
+        hs.compose_freshness_failed = True
+        hs.set_agent("skill", _deploying_agent(self.NOW, WINDOW + 120))
+        seq = mock.Mock()
+        with mock.patch("harness._run_deploy_sequence", seq), \
+             mock.patch("harness.state", hs), \
+             mock.patch("harness._emit_event") as emit:
+            _poll(hs, self.NOW, alive=True)
+        seq.assert_not_called()
+        assert len([c for c in emit.call_args_list
+                    if c.args[0] == "deploy-error"]) == 1
+
+    def test_recover_rechecks_current_state_before_starting(self):
+        """DS F3: if the agent changed after the poller released its lock (e.g.
+        a concurrent /restart flipped intent), recovery does not start."""
+        hs = HarnessState()
+        a = _deploying_agent(_real_time.time(), WINDOW + 120)
+        a.intent = AgentState.INTENT_RESTARTING
+        hs.set_agent("skill", a)
+        seq = mock.Mock()
+        with mock.patch("harness._run_deploy_sequence", seq), \
+             mock.patch("harness.state", hs), \
+             mock.patch("harness._log"):
+            assert harness._recover_stalled_deploy("skill", WINDOW + 120) is False
+        seq.assert_not_called()
+        with harness._deploy_inflight_lock:
+            assert "skill" not in harness._deploy_inflight
 
     def test_alive_inside_window_untouched(self):
         """AC3: inside the deploy window the live agent is left alone (the
@@ -370,6 +417,27 @@ class TestIdleRestartBypassesPauseGuard:
         with tempfile.TemporaryDirectory() as clone:
             state = self._idle_waiting_agent(clone)
             res, _ = self._restart(clone, kill_side_effect=OSError("denied"))
+            assert res["immediate"] is False
+            assert state.get_agent("skill").operator_force_at is None
+
+    def test_restart_of_already_dead_agent_clears_marker(self):
+        """DS F1: a restart that finds the PID already dead killed nothing, so
+        the prior natural death keeps its crash/pause handling."""
+        from harness import state, restart_agent
+        with tempfile.TemporaryDirectory() as clone:
+            self._idle_waiting_agent(clone)
+            with mock.patch("harness._NO_AUTO_REBOOT", False), \
+                 mock.patch("harness.boot_remote") as boot, \
+                 mock.patch.object(state, "save_state"), \
+                 mock.patch("harness.reboot_agent._read_claude_pid",
+                            return_value=(4321, False)), \
+                 mock.patch("harness.reboot_agent._kill_process") as kill, \
+                 mock.patch("harness.time.time", return_value=self.NOW), \
+                 mock.patch("harness._log"):
+                boot._get_all_roles.return_value = ["skill"]
+                boot._get_clone_path.return_value = str(clone)
+                res = asyncio.run(restart_agent("skill"))
+            kill.assert_not_called()
             assert res["immediate"] is False
             assert state.get_agent("skill").operator_force_at is None
 

@@ -1033,6 +1033,13 @@ class HarnessState:
                 if alive and not pid_changed:
                     _now = time.time()
                     _stall = agent.deploy_stall_action(_now)
+                    # DS F2: recovery kills + respawns, so it honours the
+                    # same spawn gates as the auto-reboot loop; with either
+                    # active the stall is only surfaced (once per intent).
+                    if (_stall == "recover"
+                            and (_NO_AUTO_REBOOT
+                                 or self.compose_freshness_failed)):
+                        _stall = "surface"
                     if _stall == "recover":
                         deploy_stall_recover.append(
                             (role, _now - agent.intent_set_at))
@@ -4880,6 +4887,13 @@ async def restart_agent(role: str, force: bool = False):
         else:
             # Already dead — the auto-reboot loop will pick it up next tick.
             immediate = False
+            # #14132 (DS F1): this restart killed nothing, so the death is not
+            # harness-requested — drop the marker so a prior natural crash keeps
+            # its crash-streak accounting and #12458 pause handling.
+            with state._lock:
+                _a = state.agents.get(role)
+                if _a is not None:
+                    _a.operator_force_at = None
 
     if immediate:
         _kind = "force" if force else "idle"
@@ -5471,6 +5485,15 @@ def _recover_stalled_deploy(role, age):
     intent=deploying (force-kills the old PID, respawns on the fresh CLAUDE.md)
     unless a deploy is already in flight. Called by the health poller OUTSIDE
     its state lock. Returns True iff a deploy thread was started."""
+    # DS F3: the poller classified under its lock and released it; a concurrent
+    # /restart or /stop may have changed the agent since. Re-verify on current
+    # state before killing anything.
+    with state._lock:
+        agent = state.agents.get(role)
+        still_stalled = (agent is not None
+                         and agent.deploy_stall_action(time.time()) == "recover")
+    if not still_stalled:
+        return False
     if not _start_deploy_thread(role, _latest_deploy_signal_id(role)):
         return False
     _log(f"{role}: alive at intent=deploying for {age:.0f}s with no ack-stop "
