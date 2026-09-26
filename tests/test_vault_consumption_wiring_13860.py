@@ -1,0 +1,97 @@
+"""#13860 P4 -- the consumption pipeline is WIRED into the agent instructions.
+
+Production-caller check (the "shipped unwired" audit pattern): each pipeline
+step's instruction surface must invoke the real vault_consume.py subcommands,
+never raw-grep the vault, and the example receipt blocks the instructions show
+agents must themselves pass the gate those agents will be held to.
+"""
+
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parent.parent
+SUB = REPO / "references" / "sub-skills"
+sys.path.insert(0, str(REPO / "references" / "scripts"))
+
+import vault_consume as vc  # noqa: E402
+
+RAW_VAULT_GREP = re.compile(r"grep[^\n`]*\.squidsquad/vault")
+
+
+def read(rel):
+    return (SUB / rel).read_text(encoding="utf-8")
+
+
+def fenced_blocks(text):
+    """Fenced code blocks, fence-pairing by line (opening fences may carry a
+    language tag, so a regex over the raw text mis-pairs them)."""
+    blocks, cur = [], None
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            if cur is None:
+                cur = []
+            else:
+                blocks.append("\n".join(cur))
+                cur = None
+        elif cur is not None:
+            cur.append(line)
+    return blocks
+
+
+def dedent_block(block):
+    return "\n".join(line.strip() for line in block.splitlines())
+
+
+class TestWorkerPickup:
+    TEXT = read("roles/worker/implement-tasks.md")
+
+    @pytest.mark.parametrize("needle", [
+        "vault_consume.py lineage-path [NUMBER]",
+        "vault_consume.py init-fix-plan [NUMBER] --role [ROLE]",
+        "vault_consume.py search --alias [ROLE] --task [NUMBER]",
+        "--types rule",
+        "vault_consume.py cite --alias [ROLE] --task [NUMBER]",
+        "vault_consume.py check-receipts [NUMBER]",
+        "check-receipts [NUMBER] --diff-base origin/main",
+        "git add <lineage path>",
+    ])
+    def test_step_invokes_pipeline(self, needle):
+        assert needle in self.TEXT
+
+    def test_no_raw_vault_grep(self):
+        assert not RAW_VAULT_GREP.search(self.TEXT)
+
+    def test_example_receipts_pass_the_gate(self):
+        blocks = [dedent_block(b) for b in fenced_blocks(self.TEXT)]
+        ctx = [b for b in blocks if b.startswith(vc.CONTEXT_SECTION)]
+        rules = [b for b in blocks if b.startswith(vc.RULES_SECTION)]
+        assert ctx and rules
+        assert vc.check_section(ctx[0], vc.CONTEXT_SECTION)[0] == "cited"
+        assert vc.check_section(rules[0], vc.RULES_SECTION)[0] == "cited"
+
+    @pytest.mark.parametrize("line,heading,status", [
+        ("- None relevant (searched: <keywords>)", vc.CONTEXT_SECTION, "none"),
+        ("- None matched (searched rules lane: <keywords>)", vc.RULES_SECTION, "none"),
+        ("- Engine unavailable: <reason>", vc.RULES_SECTION, "unavailable"),
+    ])
+    def test_documented_none_and_unavailable_lines_pass(self, line, heading, status):
+        assert line.split(" (")[0].split(":")[0].lstrip("- ") in self.TEXT
+        assert vc.check_section(f"{heading}\n{line}\n", heading)[0] == status
+
+
+class TestBugFlow:
+    TEXT = read("roles/worker/triage-issues.md")
+
+    def test_pickup_creates_fix_plan(self):
+        assert "vault_consume.py init-fix-plan [NUMBER] --role [ROLE]" in self.TEXT
+        for section in ("Root cause", "Intended direction", "Impact"):
+            assert section in self.TEXT
+
+    def test_gate_before_pending_test(self):
+        assert "check-receipts [NUMBER] --diff-base origin/main" in self.TEXT
+
+    def test_no_raw_vault_grep(self):
+        assert not RAW_VAULT_GREP.search(self.TEXT)
