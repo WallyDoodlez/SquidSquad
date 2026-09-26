@@ -138,6 +138,52 @@ class TestTeardownAndExit(unittest.TestCase):
 
 _BASH = shutil.which("bash")
 
+# Stub harness for the launcher tests: counts launches in count.txt and exits
+# with the code for that launch index from a comma-separated SEQUENCE env var.
+# #14130: under full static-gate load the old one-liner could fail on its own
+# file I/O (a transient lock on count.txt). It then exited 1 without counting,
+# which the launcher correctly reads as a crash, so the guard tripped at 3 with
+# count.txt still "1". The I/O now retries; a stub failure that survives the
+# retries exits 97 and is written to stub-errors.txt so it can never pass for
+# a scripted exit code.
+_LAUNCH_STUB = (
+    "import os, time\n"
+    "def io(fn):\n"
+    "    for i in range(50):\n"
+    "        try:\n"
+    "            return fn()\n"
+    "        except OSError:\n"
+    "            if i == 49:\n"
+    "                raise\n"
+    "            time.sleep(0.1)\n"
+    "c = 'count.txt'\n"
+    "def read():\n"
+    "    if not os.path.exists(c):\n"
+    "        return 0\n"
+    "    with open(c) as f:\n"
+    "        return int(f.read())\n"
+    "try:\n"
+    "    n = io(read)\n"
+    "    def write():\n"
+    "        with open(c, 'w') as f:\n"
+    "            f.write(str(n + 1))\n"
+    "    io(write)\n"
+    "    seq = os.environ['SEQUENCE'].split(',')\n"
+    "    code = int(seq[n]) if n < len(seq) else 0\n"
+    "except Exception as e:\n"
+    "    with open('stub-errors.txt', 'a') as f:\n"
+    "        f.write(repr(e) + '\\n')\n"
+    "    raise SystemExit(97)\n"
+    "raise SystemExit(code)\n"
+)
+
+
+def _launch_diag(tmp, r):
+    """Launcher output plus any stub self-failure, for assertion messages."""
+    errs = Path(tmp) / "stub-errors.txt"
+    return (f"\nstdout:\n{r.stdout}\nstderr:\n{r.stderr}\nstub-errors:\n"
+            f"{errs.read_text() if errs.exists() else '(none)'}")
+
 
 @unittest.skipUnless(_BASH, "bash not available")
 class TestSupervisedLauncherSh(unittest.TestCase):
@@ -164,17 +210,7 @@ class TestSupervisedLauncherSh(unittest.TestCase):
             cwd=tmp, env=env, capture_output=True, text=True, timeout=60,
         )
 
-    # Stub: increments a counter file each launch and exits with the code for
-    # that launch index from a comma-separated SEQUENCE env var.
-    _STUB = (
-        "import os\n"
-        "c = 'count.txt'\n"
-        "n = int(open(c).read()) if os.path.exists(c) else 0\n"
-        "open(c, 'w').write(str(n + 1))\n"
-        "seq = os.environ['SEQUENCE'].split(',')\n"
-        "code = int(seq[n]) if n < len(seq) else 0\n"
-        "raise SystemExit(code)\n"
-    )
+    _STUB = _LAUNCH_STUB
 
     def test_relaunches_on_restart_code_then_stops_on_clean_exit(self):
         import tempfile
@@ -190,10 +226,14 @@ class TestSupervisedLauncherSh(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             # always exit 1 (crash); guard threshold 3 → give up after 3 launches
-            r = self._run_launcher(tmp, self._STUB, {"SEQUENCE": "1,1,1,1,1"})
-            self.assertEqual(r.returncode, 1)
-            self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
-            self.assertIn("crash-loop detected", r.stderr)
+            # A huge crash window keeps a slow launch from resetting the streak.
+            r = self._run_launcher(tmp, self._STUB, {
+                "SEQUENCE": "1,1,1,1,1", "SQUIDSQUAD_HARNESS_CRASH_WINDOW": "3600"})
+            diag = _launch_diag(tmp, r)
+            self.assertEqual(r.returncode, 1, diag)
+            self.assertEqual((Path(tmp) / "count.txt").read_text(), "3", diag)
+            self.assertIn("crash-loop detected", r.stderr, diag)
+            self.assertFalse((Path(tmp) / "stub-errors.txt").exists(), diag)
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows PowerShell launcher path")
@@ -203,15 +243,7 @@ class TestSupervisedLauncherPs1(unittest.TestCase):
     the .sh class so both consolidated launchers carry equivalent coverage. #13318
     folded the former restart-harness.bat supervised loop into Invoke-Supervised."""
 
-    _STUB = (
-        "import os\n"
-        "c = 'count.txt'\n"
-        "n = int(open(c).read()) if os.path.exists(c) else 0\n"
-        "open(c, 'w').write(str(n + 1))\n"
-        "seq = os.environ['SEQUENCE'].split(',')\n"
-        "code = int(seq[n]) if n < len(seq) else 0\n"
-        "raise SystemExit(code)\n"
-    )
+    _STUB = _LAUNCH_STUB
 
     def _run_launcher(self, tmp, extra_env=None):
         squidsquad_dir = Path(tmp) / ".squidsquad"
@@ -247,10 +279,14 @@ class TestSupervisedLauncherPs1(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             # Fast consecutive crashes (elapsed < CRASH_WINDOW) → no reset → trip at 3.
-            r = self._run_launcher(tmp, {"SEQUENCE": "1,1,1,1,1"})
-            self.assertEqual(r.returncode, 1)
-            self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
-            self.assertIn("crash-loop detected", r.stdout + r.stderr)
+            # A huge crash window keeps a slow launch from resetting the streak.
+            r = self._run_launcher(tmp, {
+                "SEQUENCE": "1,1,1,1,1", "SQUIDSQUAD_HARNESS_CRASH_WINDOW": "3600"})
+            diag = _launch_diag(tmp, r)
+            self.assertEqual(r.returncode, 1, diag)
+            self.assertEqual((Path(tmp) / "count.txt").read_text(), "3", diag)
+            self.assertIn("crash-loop detected", r.stdout + r.stderr, diag)
+            self.assertFalse((Path(tmp) / "stub-errors.txt").exists(), diag)
 
 
 try:
