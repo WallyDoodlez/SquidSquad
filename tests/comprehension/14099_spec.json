@@ -1,0 +1,38 @@
+{
+  "issue": 14099,
+  "title": "Monitor deadline-expiry re-arm vs. exit-session rule (event-mode contract, L1 5, AGENT-RUNTIME inline resume)",
+  "authored_by": "verifier",
+  "ac": "AC4 (LLM-consumed instruction change; replaces superseded 9742_spec.json)",
+  "files": [
+    "references/roles/instructions.md",
+    "references/sub-skills/common-events/event-mode-contract.md",
+    "docs/AGENT-RUNTIME.md"
+  ],
+  "questions": [
+    {
+      "id": "a",
+      "question": "You are an idle event-mode agent and the Monitor tool posts a notice: 'Monitor expired after 30m ... Re-arm it if you still need the watch.' What do you do, and what must you NOT do?",
+      "expected": "Re-arm: re-invoke Monitor once with the identical invocation (same command, timeout_ms 1800000, no persistent key). Do NOT end the session, do NOT pivot to forge-direct work or polling mode. Expiry is routine, nothing is wrong."
+    },
+    {
+      "id": "b",
+      "question": "The Monitor expiry notice arrives while you are in the middle of working a task. When do you re-arm, and how many watches may exist at once?",
+      "expected": "Finish the current atomic unit of work first (treat it like a mid-task NUDGE), then re-arm once. Never run two watches at once."
+    },
+    {
+      "id": "c",
+      "question": "event_poll.py exits on its own (for example via its sys.exit(2) retry ceiling), or the Monitor tool errors or the stream closes, and there is NO expiry notice. What do you do?",
+      "expected": "End the session immediately. Do NOT re-arm Monitor, do NOT wait for harness recovery, do NOT pivot to forge-direct work or polling mode. The exit is the signal for the harness auto-respawn to recover."
+    },
+    {
+      "id": "d",
+      "question": "A human inline session with you has just ended (the human is done or the 20-minute auto-timeout fired). Under what condition do you re-arm Monitor, and when do you leave the existing watch alone?",
+      "expected": "Re-arm the same invocation only if a Monitor expiry notice arrived during the inline turn and has not yet been re-armed. If no expiry notice arrived, the original watch is still armed: do not re-arm (never two watches at once)."
+    },
+    {
+      "id": "e",
+      "question": "Monitor ends and you cannot tell whether it was a deadline expiry or something else, because you saw no expiry notice. How should you treat it?",
+      "expected": "As 'end the session'. The expiry notice is the only signal that means re-arm; every Monitor exit without it ends the session."
+    }
+  ]
+}
