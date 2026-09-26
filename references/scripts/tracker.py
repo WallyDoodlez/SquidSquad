@@ -26,7 +26,8 @@ Role authority (who may call `transition`):
                                      #6274 D11 dual-aware: old `qa`/`qa-lead` still accepted (deprecation warning).
   - Assigned worker role (--role <r>) : open -> in-progress, approved -> in-progress,
                                      in-progress <-> pending-test, open -> pending-test,
-                                     in-progress -> approved (must match issue's `role:*` label),
+                                     in-progress -> approved (must match issue's `role:*` label; PM also
+                                     holds it for pipeline-sentinel stall recovery, #14125),
                                      in-progress <-> blocked (#13515: owned-but-parked self-pause;
                                      assignee only in both directions)
   - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,

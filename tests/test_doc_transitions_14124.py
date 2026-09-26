@@ -67,6 +67,13 @@ def test_14124_dm_citation_route_back_uses_legal_edge():
     text = (REPO / "references/sub-skills/roles/dm/delivery-packaging.md").read_text(encoding="utf-8")
     assert "transition [NUMBER] pending-ship pending-test" not in text
     assert "transition [NUMBER] pending-ship in-progress --role dm-lead" in text
+    # The route-back wakes the worker, so its comment must address the worker...
+    cite = [l for l in text.splitlines() if "PR does not cite the planning contract" in l]
+    assert len(cite) == 1 and "worker: cite the planning artifacts" in cite[0]
+    assert "verifier: confirm AC walk" not in text
+    # ...and the stacked-PR route-back (same transition) keeps its own remedy.
+    stacked = [l for l in text.splitlines() if "is stacked on" in l and "--message" in l]
+    assert len(stacked) == 1 and "retarget the PR base" in stacked[0]
 
 
 def test_14125_pm_may_return_stalled_task_to_approved(monkeypatch):
