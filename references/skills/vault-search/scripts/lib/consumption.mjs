@@ -45,6 +45,7 @@ export const DEFAULT_CONFIG = {
     decision: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'decision-' },
     pattern: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'pattern-' },
     learning: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'learning-' },
+    rule: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'rule-' },
     system: { folder: 'systems', traversal: 'free', weight: 0.8, hub: true },
     archive: { folder: 'archives', traversal: 'free', weight: 0.5, hub: false },
   },

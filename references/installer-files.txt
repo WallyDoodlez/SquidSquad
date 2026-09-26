@@ -254,6 +254,7 @@ references/vault-templates/learning.md
 references/vault-templates/pattern.md
 references/vault-templates/project.md
 references/vault-templates/resource.md
+references/vault-templates/rule.md
 references/vault-templates/system.md
 references/hints-worker.txt
 references/hints-dm.txt

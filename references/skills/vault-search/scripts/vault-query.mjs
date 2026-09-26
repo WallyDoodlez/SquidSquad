@@ -17,6 +17,8 @@
 //   - §6.1: the engine writes `impression` (surfaced in top-K) and `walked`
 //     (traversed connector surfaced in top-K) events only. `used` is written
 //     only by consumers via record-consumption.mjs — never here.
+//   - --types (#13860): restrict surfaced notes to a type lane (e.g. `rule`
+//     for pickup rules matching, VAULT-ARCH §9.3); absent = all types.
 //   - --no-write: dry run, zero telemetry events (§6.1 / AC4).
 //
 // ----------------------------------------------------------------------------
@@ -361,6 +363,13 @@ function rankedEntry(n, tier, direct, telemetry, cfg, todayISO, derived) {
 export function runQuery(notes, query, cfg, telemetry, todayISO, derived = null) {
   const d = derived ?? deriveSchema(cfg);
   const bySlug = new Map(notes.map((n) => [n.slug, n]));
+  // Optional type lane (#13860 S4.2 rules matching: `--types rule`). Only
+  // notes whose resolved type is in the set surface — as direct results or
+  // as traversed connectors; traversal itself still walks the whole graph.
+  const typeSet = Array.isArray(query.types) && query.types.length > 0
+    ? new Set(query.types.map((t) => t.toLowerCase()))
+    : null;
+  const inLane = (n) => typeSet === null || typeSet.has(String(parseType(n.content) || n.folder).toLowerCase());
 
   // Stage 1 — direct matches with best tier, plus Stage-2 tie-break score.
   const results = [];
@@ -372,7 +381,9 @@ export function runQuery(notes, query, cfg, telemetry, todayISO, derived = null)
   }
   results.sort(compareRanked);
 
-  // Budgeted traversal from the direct-match set (§3.1/§6.2).
+  // Budgeted traversal from the FULL direct-match set (§3.1/§6.2) — a lane
+  // note linked from an out-of-lane match (a rule its parent decision cites)
+  // is still reached; the lane filter applies to what surfaces.
   const reached = traverse(
     results.map((r) => r.note),
     bySlug,
@@ -381,6 +392,7 @@ export function runQuery(notes, query, cfg, telemetry, todayISO, derived = null)
   );
   const traversed = [];
   for (const { note, walkedFrom } of reached.values()) {
+    if (!inLane(note)) continue;
     const entry = rankedEntry(note, 'walked', false, telemetry, cfg, todayISO, d);
     entry.walkedFrom = [...walkedFrom];
     traversed.push(entry);
@@ -392,7 +404,7 @@ export function runQuery(notes, query, cfg, telemetry, todayISO, derived = null)
     return a.slug.localeCompare(b.slug);
   });
 
-  return { results, traversed };
+  return { results: results.filter((r) => inLane(r.note)), traversed };
 }
 
 // ---- telemetry emission -----------------------------------------------------
@@ -430,6 +442,7 @@ export function parseArgs(argv) {
     entities: [],
     tags: [],
     terms: [],
+    types: [],
     top: null,
     write: true,
     instanceId: '',
@@ -439,12 +452,14 @@ export function parseArgs(argv) {
   const entities = [];
   const tags = [];
   const terms = [];
+  const types = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--vault') out.vault = argv[++i];
     else if (a === '--entities') entities.push(argv[++i]);
     else if (a === '--tags') tags.push(argv[++i]);
     else if (a === '--terms') terms.push(argv[++i]);
+    else if (a === '--types') types.push(argv[++i]);
     else if (a === '--top') out.top = Number(argv[++i]);
     else if (a === '--no-write') out.write = false;
     else if (a === '--instance-id') out.instanceId = String(argv[++i] || '').trim();
@@ -459,6 +474,7 @@ export function parseArgs(argv) {
   out.entities = splitList(entities);
   out.tags = splitList(tags);
   out.terms = splitList(terms);
+  out.types = splitList(types);
   return out;
 }
 
@@ -470,7 +486,7 @@ function todayISO() {
 
 const USAGE =
   'usage: vault-query.mjs --instance-id <uuid> --alias <alias> [--task N]\n' +
-  '       [--vault <path>] [--entities a,b] [--tags x,y] [--terms "free text"] [--top N] [--no-write]\n';
+  '       [--vault <path>] [--entities a,b] [--tags x,y] [--terms "free text"] [--types t1,t2] [--top N] [--no-write]\n';
 
 // Shape a ranked item into the public JSON result object (drops the internal
 // note handle). `walkedFrom` is included only for traversed items.
@@ -518,6 +534,7 @@ export function main(argv = process.argv.slice(2), deps = {}) {
   const topK = Math.max(0, Math.trunc(
     args.top != null && Number.isFinite(args.top) ? args.top : cfg.searchTopK));
   const query = { entities: args.entities, tags: args.tags, terms: args.terms };
+  if (args.types.length > 0) query.types = args.types;
 
   const derived = deriveSchema(cfg);
   const notes = loadVault(args.vault, derived.folders);
