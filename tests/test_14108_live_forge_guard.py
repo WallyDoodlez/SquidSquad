@@ -70,6 +70,19 @@ class TestDecision:
         assert conftest._live_forge_call(["git", "push", "origin", "main"], str(r)) is None
 
     @needs_git
+    def test_git_dash_C_targets_that_repo(self, tmp_path):
+        """`git -C <local clone> push` from a cwd whose origin is GitHub is a
+        local push (the #13859 two-clone tests); `-C <network repo>` is not."""
+        local = repo_with_origin(tmp_path, str(tmp_path / "origin.git"))
+        net_parent = tmp_path / "n"
+        net_parent.mkdir()
+        net = repo_with_origin(net_parent, "https://example.invalid/o/r.git")
+        assert conftest._live_forge_call(
+            ["git", "-C", str(local), "push", "origin", "main"], str(net)) is None
+        assert conftest._live_forge_call(
+            ["git", "-C", str(net), "push", "origin", "main"], str(local))
+
+    @needs_git
     def test_non_network_git_verbs_allowed_anywhere(self, tmp_path):
         r = repo_with_origin(tmp_path, "https://example.invalid/o/r.git")
         assert conftest._live_forge_call(["git", "status"], str(r)) is None

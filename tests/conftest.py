@@ -292,7 +292,13 @@ def _live_forge_call(args, cwd):
     verb = next((a for a in argv[1:] if a in _GIT_NETWORK_VERBS), None)
     if verb is None:
         return None
-    probe = _REAL_RUN(["git", "remote", "get-url", "origin"], cwd=cwd,
+    # `git -C <dir>` (repeatable, each relative to the previous) sets the repo
+    # the command acts on -- probe THAT repo's origin, not the process cwd.
+    where = Path(cwd) if cwd else Path.cwd()
+    for i, a in enumerate(argv[1:-1], start=1):
+        if a == "-C":
+            where = where / argv[i + 1]
+    probe = _REAL_RUN(["git", "remote", "get-url", "origin"], cwd=str(where),
                       capture_output=True, text=True, encoding="utf-8",
                       errors="replace", check=False)
     origin = (probe.stdout or "").strip()
