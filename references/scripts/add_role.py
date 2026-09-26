@@ -151,17 +151,23 @@ def _write_local_config(agents_map, target_path=None):
 
 
 def _sync_local_config(agents_map):
-    """Write .local-config to ALL known clone roots."""
-    seen_roots = set()
-    for role, clone_path in agents_map.items():
-        root = Path(clone_path)
-        if root in seen_roots:
-            continue
-        seen_roots.add(root)
-        config_path = root / ".squidsquad" / ".local-config"
-        if config_path.parent.exists():
-            _write_local_config(agents_map, config_path)
-            print(f"  Synced .local-config in {root}")
+    """Write .local-config to ALL known clone roots.
+
+    Entries may be relative to this repo root (compose writes them that way),
+    so they are resolved here and re-rendered relative to EACH target clone
+    (#14095). Copying the map verbatim made the primary's `- **pm**: .`
+    resolve to every other clone's own checkout.
+    """
+    if str(SCRIPT_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPT_DIR))
+    from boot_remote import sync_local_config_to_clones
+
+    resolved = {}
+    for role in sorted(agents_map):
+        p = Path(agents_map[role])
+        resolved[role] = p if p.is_absolute() else (REPO_ROOT / p).resolve()
+    for cfg in sync_local_config_to_clones(resolved):
+        print(f"  Synced .local-config in {cfg.parent.parent}")
 
 
 def _get_upstream_url():
@@ -405,7 +411,9 @@ def list_clones():
         return
     for role in sorted(agents_map):
         path = agents_map[role]
-        exists = Path(path).exists()
+        p = Path(path)
+        # Relative entries resolve against the repo root, not the cwd (#14095).
+        exists = (p if p.is_absolute() else REPO_ROOT / p).exists()
         status = "OK" if exists else "MISSING"
         print(f"  {role}: {path} [{status}]")
 
