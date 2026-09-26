@@ -10,13 +10,13 @@ Reached from `verification.md` Step 4 when there are `type:issue` bugs pending t
 
 Print: `[🦑 HH:MM:SS] Verifying fixed issues...`
 
-Query all issues pending test:
+Query all issues pending test, across every role (worker aliases, PM, DM):
 
 ```bash
-python references/scripts/tracker.py list-issues skill --status pending-test
+python references/scripts/tracker.py list-by-labels type:issue,status:pending-test
 ```
 
-(Repeat for each worker role.)
+The query is role-agnostic by design (#14147). Never narrow it to one `role:*` label, or items owned by other aliases are never verified.
 
 For each issue:
 

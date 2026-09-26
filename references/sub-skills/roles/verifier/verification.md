@@ -39,13 +39,13 @@ Print: `[🦑 HH:MM:SS] Verifying fixed issues...` (skip if no `type:issue` bugs
 
 Print: `[🦑 HH:MM:SS] Verifying pending test tasks...`
 
-Query all tasks pending test:
+Query all tasks pending test, across every role (worker aliases, PM, DM):
 
 ```bash
-python references/scripts/tracker.py list-tasks skill --status pending-test
+python references/scripts/tracker.py list-by-labels type:task,status:pending-test
 ```
 
-(Adjust role as needed for other agents.)
+The query is role-agnostic by design (#14147). Never narrow it to one `role:*` label, or items owned by other aliases are never verified.
 
 For each task:
 
