@@ -22,6 +22,7 @@ _retire_state_branch_in_clones); it can also be run by hand:
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -41,10 +42,10 @@ def _git(root, *args, timeout=120):
 
 def _worktree_listed(root, wt):
     out = _git(root, "worktree", "list", "--porcelain").stdout
-    target = str(wt.resolve()).replace("\\", "/").lower()
+    target = os.path.normcase(os.path.normpath(str(wt.resolve())))
     for line in out.splitlines():
         if line.startswith("worktree "):
-            path = line[len("worktree "):].strip().replace("\\", "/").lower()
+            path = os.path.normcase(os.path.normpath(line[len("worktree "):].strip()))
             if path == target:
                 return True
     return False
@@ -93,18 +94,28 @@ def teardown(clone_root, now=None):
                     "error": f"bundle failed: {(made.stderr or '').strip()[:300]}"}
         result["bundle"] = str(bundle)
     if has_dir:
-        copied = _copy_tree(wt, backup / "worktree")
+        try:
+            copied = _copy_tree(wt, backup / "worktree")
+        except OSError as e:  # e.g. Windows MAX_PATH on a deep file
+            return {**result, "action": "error", "error": f"backup copy failed: {e}"}
         mismatched = [r for r, size in copied.items()
                       if (backup / "worktree" / r).stat().st_size != size]
         if mismatched:
             return {**result, "action": "error", "error": f"copy size mismatch: {mismatched}"}
         result["files"] = copied
 
-    # Backup verified -- now remove.
+    # Backup verified -- now remove. The directory must really be gone before
+    # the registration is pruned and the branch deleted: a locked file (a
+    # stale writer, an indexer) would otherwise leave a git-orphaned directory
+    # with its branch already deleted. Stop with everything else intact.
     if listed:
         _git(root, "worktree", "remove", "--force", str(wt))
     if wt.exists():
         shutil.rmtree(wt, ignore_errors=True)
+    if wt.exists():
+        return {**result, "action": "error",
+                "error": f"{wt} could not be removed (file in use?); branch and "
+                         "worktree registration left intact -- retried next boot"}
     _git(root, "worktree", "prune")
     if has_branch:
         _git(root, "branch", "-D", STATE_BRANCH)

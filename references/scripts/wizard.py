@@ -3925,7 +3925,6 @@ def generate_default_spec(scan_data=None, repo_info=None, target_dir=None):
         },
         "git_branches": {
             "working": "main",
-            "state": "squid-squad",
         },
         "forge_backend": {
             "provider": "github",

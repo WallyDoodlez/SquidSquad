@@ -123,6 +123,33 @@ class TestTeardown:
         assert (with_worktree / td.WORKTREE_DIR).exists()
         assert td.WORKTREE_DIR in git(with_worktree, "worktree", "list")
 
+    def test_undeletable_directory_keeps_branch_and_registration(self, with_worktree, monkeypatch):
+        """Review F1: a locked file must not leave a git-orphaned directory with
+        its branch already deleted."""
+        monkeypatch.setattr(td.shutil, "rmtree", lambda *a, **k: None)
+        real = td._git
+
+        def no_remove(root, *args, **kw):
+            if args[:2] == ("worktree", "remove"):
+                return subprocess.CompletedProcess(args, 1, "", "file in use")
+            return real(root, *args, **kw)
+
+        monkeypatch.setattr(td, "_git", no_remove)
+        out = td.teardown(with_worktree)
+        assert out["action"] == "error" and "could not be removed" in out["error"]
+        assert Path(out["backup"]).exists()
+        assert td.WORKTREE_DIR in git(with_worktree, "worktree", "list")
+        assert subprocess.run(["git", "rev-parse", "--verify", "--quiet",
+                               f"refs/heads/{td.STATE_BRANCH}"], cwd=str(with_worktree)).returncode == 0
+
+    def test_copy_failure_removes_nothing(self, with_worktree, monkeypatch):
+        def boom(src, dest):
+            raise OSError("path too long")
+        monkeypatch.setattr(td, "_copy_tree", boom)
+        out = td.teardown(with_worktree)
+        assert out["action"] == "error" and "path too long" in out["error"]
+        assert (with_worktree / td.WORKTREE_DIR).exists()
+
     def test_backups_dir_is_gitignored(self):
         assert ".squidsquad/backups/" in (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
 
@@ -161,6 +188,26 @@ class TestHarnessWiring:
         assert [r["action"] for r in results] == ["torn-down"]  # no-op clone not reported
         assert not (with_worktree / td.WORKTREE_DIR).exists()
 
+    def test_clone_with_live_agent_is_deferred(self, with_worktree):
+        """Review F2: never race an agent that may still run pre-#14144 code."""
+        import harness
+        agent = harness.AgentState("pm")
+        agent.claude_pid, agent.clone_path = 4242, str(with_worktree)
+        (with_worktree / ".squidsquad").mkdir(exist_ok=True)
+        mig = with_worktree / "references" / "migrations"
+        mig.mkdir(parents=True)
+        (mig / "state_branch_teardown.py").write_text(
+            (REPO / "references" / "migrations" / "state_branch_teardown.py").read_text(
+                encoding="utf-8"), encoding="utf-8")
+        with patch.object(harness, "REPO_ROOT", with_worktree), \
+             patch.object(harness, "SQUIDSQUAD_DIR", with_worktree / ".squidsquad"), \
+             patch.object(harness.boot_remote, "_parse_local_config", return_value={}), \
+             patch.object(harness.boot_remote, "_is_process_alive", lambda pid: pid == 4242), \
+             patch.dict(harness.state.agents, {"pm": agent}, clear=True):
+            results = harness._retire_state_branch_in_clones()
+        assert results[0]["action"] == "deferred" and "pm" in results[0]["error"]
+        assert (with_worktree / td.WORKTREE_DIR).exists()
+
 
 class TestSingleLocation:
     def test_no_runtime_reference_to_retired_worktree(self):
@@ -197,6 +244,10 @@ class TestSingleLocation:
                 config.get_field("state-branch")
 
     def test_wizard_config_has_no_state_branch(self):
+        """Review F3: neither the rendered config nor the persisted install
+        spec carries the retired branch."""
         import wizard
         src = inspect.getsource(wizard)
-        assert "State Branch" not in src
+        assert "State Branch" not in src and "squid-squad" not in src
+        spec = wizard.generate_default_spec()
+        assert "state" not in spec["git_branches"]
