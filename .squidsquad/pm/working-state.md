@@ -2,8 +2,8 @@
 
 - **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
 - **Team resumed (2026-09-26 ~09:59)**: harness restarted, all 4 agents running (was operator-paused 2026-07-20: skill/qa/dm stopped). Uncommitted operator WIP in primary clone: CRLF-normalized compose checksum fix (compose_freshness.py + test) — not PM's, do not touch.
-- **Status**: EVENT boot 2026-09-26 14:04 (quiet), respawn after deploy-signal 8a086942e3e626e3. Boot drain 12 events, all informational: dm shipped #14054 #14095 #14096 #14098 #14108 #14123 (#14099 also shipped). No externals.
-- **Updated**: 2026-09-26 18:31 — honoring deploy-signal 0ace8614f791e357 (PR #14158 / #14114 merged; L1 instructions changed). Session work: #14113 resolved -> #14144 (merged, AC6 awaits HARNESS restart); #14148 closed; ACs added to #13861 #14114 #14147 #14137 #14162; filed #14137 #14144 #14150 #14157 #14162; BRIEFING refreshed 18:20. **ON NEXT BOOT**: open operator Qs remain — harness restart (single restart covers #14144 AC6, #13861 P5, #14131/#14132, #14137 AC2, #14114 harness bits), #13862 M3 manifest, #14157, version bump. A deploy-signal respawn is NOT a harness restart.
+- **Status**: EVENT boot 2026-09-26 ~18:34 (quiet), respawn after deploy-signal 0ace8614f791e357. Boot drain 3 events: #14164 (BRIEFING over budget, assigned pm) FIXED in 81b89d23e (1661->1223 words, remaining 411) -> pending-test; #14114 shipped (dm).
+- **Updated**: 2026-09-26 ~18:55 — **HARNESS RESTART triggered (operator-authorized)** via POST /restart; recorded on #14144. **ON NEXT BOOT (post-restart verification)**: GET /status -> all 4 running + bootup_complete + EVENT; qa intent no longer `deploying` (was stuck since 18:30:57); then qa verifies #14144 AC6. Tell operator the result. Remaining operator Qs: #13862 M3 manifest, #14157, version bump 0.46.0.
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 
@@ -29,4 +29,4 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 
 - work_queue(pm approved) = #13856 (vault-v2 PRD umbrella, tracking vehicle only) + #10690 GATED (E7/#10686 approved, not shipped) — neither pickable (re-verified 2026-09-26 10:20).
 - Parked coord-holds: #11092 / #10839 / #9968.
-- Idle-driver: burst 3/3 complete 2026-09-26 18:18 (#14150, #14157; 3rd: BRIEFING freeze Q on #13862); cancelled at cap, cron e809558b deleted. Reidle after next forge work. BRIEFING refreshed 18:20 (confirmed outside freeze). Monitor task buwjqat5z.
+- Idle-driver: reidled 2026-09-26 ~18:36 (scan_count 0/3), cron 305a41a8 (7,37 * * * *). Monitor task bziaxi25d.
