@@ -107,6 +107,14 @@ def _block_live_harness_egress(monkeypatch):
     except ImportError:
         pass
 
+    # #14108: _do_commit_push ends with `if _worktree_exists(): _state_commit()`.
+    # On a clone with a real .squidsquad-state worktree, every test reaching it
+    # ran state_bus.commit_and_push for real: `git add -A` + commit in the live
+    # worktree, then a push of the live state branch when anything was dirty.
+    # Default the probe to "no worktree"; tests exercising the state-bus path
+    # re-patch _worktree_exists (and _state_commit) in their own bodies.
+    monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+
 
 # ---------------------------------------------------------------------------
 # Validation
