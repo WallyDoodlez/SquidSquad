@@ -28,6 +28,9 @@ def _wire(monkeypatch, adapter, model="deepseek-chat"):
     monkeypatch.setattr(model_router, "_ensure_deps", lambda m: None)
     monkeypatch.setattr(model_router, "_load_adapter", lambda m: adapter)
     monkeypatch.setattr(model_router, "_log_diagnostic", lambda e: None)
+    # Inputs live in tmp_path (outside the repo); this suite tests the error
+    # contract, not the #14150 all-inputs-skipped guard, so admit them.
+    monkeypatch.setattr(model_router, "_is_path_in_sandbox", lambda p: True)
 
 
 def _route(tmp_path, task_type="research"):
@@ -87,6 +90,7 @@ class TestNoArtifactOnError:
         monkeypatch.setattr(model_router, "get_model_for_task", lambda t: "ghost-model")
         monkeypatch.setattr(model_router, "_load_provider_manifest", lambda m: (None, None))
         monkeypatch.setattr(model_router, "_log_diagnostic", lambda e: None)
+        monkeypatch.setattr(model_router, "_is_path_in_sandbox", lambda p: True)
         inp = tmp_path / "input.md"
         inp.write_text("input\n", encoding="utf-8")
         out = tmp_path / "OUT.md"
