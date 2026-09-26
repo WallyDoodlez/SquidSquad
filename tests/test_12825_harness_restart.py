@@ -205,6 +205,7 @@ class TestSupervisedLauncherPs1(unittest.TestCase):
 
     _STUB = (
         "import os\n"
+        "print('stub-harness-output', flush=True)\n"
         "c = 'count.txt'\n"
         "n = int(open(c).read()) if os.path.exists(c) else 0\n"
         "open(c, 'w').write(str(n + 1))\n"
@@ -242,6 +243,15 @@ class TestSupervisedLauncherPs1(unittest.TestCase):
             self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
             self.assertIn("relaunching", r.stdout)
             self.assertIn("exited cleanly", r.stdout)
+
+    def test_harness_stdout_reaches_launcher_stdout(self):
+        # `exit (Invoke-Supervised)` used to swallow the harness's stdout as the
+        # function's return value → empty harness-supervisor.log.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self._run_launcher(tmp, {"SEQUENCE": "42,0"})
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(r.stdout.count("stub-harness-output"), 2, r.stdout)
 
     def test_crash_loop_guard_gives_up(self):
         import tempfile

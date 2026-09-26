@@ -72,7 +72,10 @@ function Invoke-Supervised {
     $baseArg = @($parts[1..($parts.Count - 1)])
     while ($true) {
         $start = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-        & $exe @baseArg @HarnessArgs
+        # Out-Host: without it the harness's stdout becomes this function's
+        # return value, which `exit (Invoke-Supervised)` swallows — the harness
+        # log stays empty and the captured output grows in memory forever.
+        & $exe @baseArg @HarnessArgs | Out-Host
         $code = $LASTEXITCODE
         $end = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
