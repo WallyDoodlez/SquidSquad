@@ -20,5 +20,6 @@
       "question": "Per event-mode-contract.md, who is responsible for enforcing the retry ceiling on harness reachability, and where does that ceiling live?",
       "expected": "event_poll.py --wait enforces it internally. The agent does NOT need to enforce a retry ceiling itself. event_poll.py has a bounded retry ceiling of 10 consecutive transient failures per CONTEXT-9742 so a sustained harness outage causes Monitor to exit on its own. The agent just needs to follow the unconditional rule of exiting the session when Monitor exits."
     }
-  ]
+  ],
+  "superseded_by": 14099
 }
