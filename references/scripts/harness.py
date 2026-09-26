@@ -2662,6 +2662,48 @@ def _distribute_instance_id_to_clones(instance_id) -> list | None:
     return rewritten
 
 
+def _retire_state_branch_in_clones() -> list | None:
+    """#14144: one-time, backup-first teardown of the retired state branch and
+    its worktree in every clone (this harness's own included), before agents
+    spawn. The per-clone logic lives in references/migrations/ so the runtime
+    code carries no reference to the retired location; a clone with nothing
+    to retire is a no-op, so this is safe on every boot.
+
+    Production-only, same guard and reason as ``_distribute_port_to_clones``
+    (#13352). Returns the per-clone results that did something, or ``None``
+    when skipped.
+    """
+    live_squid = REPO_ROOT / ".squidsquad"
+    try:
+        is_production = SQUIDSQUAD_DIR.resolve() == live_squid.resolve()
+    except OSError:
+        is_production = False
+    if not is_production:
+        _log(
+            "Isolated SQUIDSQUAD_DIR — skipping state-branch retirement "
+            "(#13352: test harnesses must not write into live clones)"
+        )
+        return None
+    import importlib.util
+    mod_path = REPO_ROOT / "references" / "migrations" / "state_branch_teardown.py"
+    spec = importlib.util.spec_from_file_location("state_branch_teardown", mod_path)
+    teardown_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(teardown_mod)
+    roots = {REPO_ROOT.resolve()}
+    roots.update(Path(p).resolve() for p in boot_remote._parse_local_config().values())
+    results = []
+    for root in sorted(roots):
+        if not (root / ".git").exists():
+            continue
+        try:
+            res = teardown_mod.teardown(root)
+        except Exception as e:  # noqa: BLE001 — one bad clone must not block boot
+            res = {"clone": str(root), "action": "error", "error": repr(e)}
+        if res.get("action") != "noop":
+            results.append(res)
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Vault maintenance window (#13861, PRD-VAULT-V2 S5.1, VAULT-ARCH 9.6)
 # ---------------------------------------------------------------------------
@@ -2913,6 +2955,18 @@ async def lifespan(app: FastAPI):
                     _log(f"Instance id distributed to {role} clone (was {old or 'unset'})")
             except (SystemExit, Exception) as e:
                 _log(f"WARNING: Could not distribute instance id to clones: {e}")
+
+        # Retire the state branch + worktree in every clone, backup first
+        # (#14144) -- before auto-start, so no session starts on a split tree.
+        try:
+            for res in _retire_state_branch_in_clones() or ():
+                if res.get("action") == "torn-down":
+                    _log(f"State branch retired in {res['clone']} (backup: {res['backup']})")
+                else:
+                    _log(f"WARNING: state-branch retirement in {res.get('clone')}: "
+                         f"{res.get('error')}")
+        except (SystemExit, Exception) as e:
+            _log(f"WARNING: Could not retire the state branch: {e}")
 
         event_lifecycle.load()
         activity_detector.start()
