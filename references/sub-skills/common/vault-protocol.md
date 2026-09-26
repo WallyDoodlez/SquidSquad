@@ -33,7 +33,7 @@ Every vault search goes through the engine. **Never grep, glob, or Read-scan the
 python references/scripts/vault_consume.py search --alias [ROLE] [--task N] --tags <keywords> --terms "<subject>" [--types rule]
 ```
 
-- Output is ranked metadata only (slug, path, title, tier). Read the note bodies you need; reading a note the engine surfaced is the intended follow-up.
+- Output is ranked metadata, never note bodies: each result carries `slug`, `path`, `title`, `type`, `status`, `tags`, `tier` and usage counts, among other fields. Read the note bodies you need; reading a note the engine surfaced is the intended follow-up.
 - Pass `--task N` whenever you are working an issue — telemetry attributes to it. Pass `--no-write` only for diagnostics.
 - Exit code 3 = engine unavailable. Say so honestly wherever a result was expected; never substitute a grep, never claim "none relevant".
 - `BRIEFING.md` and `areas/human-profile.md` are read directly (no search needed).
@@ -44,11 +44,14 @@ These steps are mandatory and their output is committed:
 
 | When | Who | Step |
 |---|---|---|
-| Task filing | PM | `vault_consume.py inject-context <n>` appends `## Vault context` to the issue body (task-intake Phase 3) |
+| Task filing | PM | `vault_consume.py inject-context <n> --alias [ROLE] --tags <keywords> --terms "<subject>"` appends `## Vault context` to the issue body (task-intake Phase 3) |
 | Pickup | worker | Context consultation + rules matching; receipts `## Vault context consumed` and `## Applicable rules` go in the issue's single lineage file (`vault_consume.py lineage-path <n>`) — procedure in implement-tasks step 2c |
 | Verification | verifier | `vault_consume.py check-receipts <n> --diff-base origin/main` + rule compliance |
 
-Receipt lines are `- [[slug]] -- one-line relevance`, or exactly one of `- None relevant (searched: …)` / `- None matched (searched rules lane: …)` / `- Engine unavailable: <reason>`.
+Receipt lines, per section (the gate checks them section by section):
+- `## Vault context consumed`: `- [[slug]] -- one-line relevance` lines, or the single line `- None relevant (searched: …)`.
+- `## Applicable rules`: `- [[rule-slug]] -- how it applies` lines, or the single line `- None matched (searched rules lane: …)`.
+- Either section: the single line `- Engine unavailable: <reason>` when the search could not run.
 
 **Citation duty**: whenever a note shapes a committed artifact (a receipt, a research doc, a plan), record it — the engine cannot:
 
