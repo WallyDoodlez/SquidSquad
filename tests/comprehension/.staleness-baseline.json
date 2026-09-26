@@ -49,7 +49,15 @@
  },
  "12800_spec.json": {},
  "12818_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "fcdf19bd687a52c2f93c285ac46acae9307c9d20"
+  "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
+  "references/roles/identity.md": "fb99cbd648803c27b0d96bba454bbca9cedc0285",
+  "references/roles/instructions.md": "15f15107248f1507fde04a06357a6d2d92286aa2",
+  "references/roles/pm/SOUL.md": "6be19202e9da19c03b4ee5c404f63d2d00b12436",
+  "references/roles/pm/identity.md": "2cbd4cfced8727eadb51aa0469d5397548eef159",
+  "references/roles/pm/instructions.md": "98d70014d067f94d607b49cea2e69fb5281c897a",
+  "references/roles/pm/responsibility.md": "6f7ff5270e944e43e02c143c7512f0953af8d80a",
+  "references/roles/responsibility.md": "8495bfec35fdabb092bdf164a356922c92f5e4df",
+  "references/roles/vault.md": "286bc8ec1bf36c8612953968ceaecccc7adc877e"
  },
  "12825_spec.json": {
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
@@ -240,9 +248,26 @@
   "tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md": "b4c02ca4eaf7d3f370533052128c2eaea0d4e4af"
  },
  "9184_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "fcdf19bd687a52c2f93c285ac46acae9307c9d20",
-  ".squidsquad/qa/CLAUDE.md": "b0cbb805b2c8f06f763225c6a80fa446766b309a",
-  ".squidsquad/skill/CLAUDE.md": "406bd2b47533b0490420422431ad05da072a28ba",
+  "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
+  "references/roles/identity.md": "fb99cbd648803c27b0d96bba454bbca9cedc0285",
+  "references/roles/instructions.md": "15f15107248f1507fde04a06357a6d2d92286aa2",
+  "references/roles/pm/SOUL.md": "6be19202e9da19c03b4ee5c404f63d2d00b12436",
+  "references/roles/pm/identity.md": "2cbd4cfced8727eadb51aa0469d5397548eef159",
+  "references/roles/pm/instructions.md": "98d70014d067f94d607b49cea2e69fb5281c897a",
+  "references/roles/pm/responsibility.md": "6f7ff5270e944e43e02c143c7512f0953af8d80a",
+  "references/roles/responsibility.md": "8495bfec35fdabb092bdf164a356922c92f5e4df",
+  "references/roles/vault.md": "286bc8ec1bf36c8612953968ceaecccc7adc877e",
+  "references/roles/verifier/SOUL.md": "895bba0f342da3f41f821987b03400b5d47fe7ff",
+  "references/roles/verifier/identity.md": "b34e246bad15f781cde5801f047ecf6a8fdc6952",
+  "references/roles/verifier/instructions.md": "7a2a881f301e1b160d8bd602c5e9e54df99bbf73",
+  "references/roles/verifier/responsibility.md": "e97719137ce8f341e382163cf1ed5049c3756a3f",
+  "references/roles/worker/SOUL.md": "b5b3682f4a00f1afc385d3761dfa5c63f0ee324c",
+  "references/roles/worker/identity.md": "1eb8e12f9611b321f5bdb6d86280b246c14bb9d9",
+  "references/roles/worker/instructions.md": "ffe6c41c8eb1967d4b47e8955c1156e6ef577f33",
+  "references/roles/worker/responsibility.md": "cf8b2a73cef18d5b5a0a3b14c124d949f007da6c",
+  "references/roles/worker/skill/SOUL.md": "6745729a64f1acb35c35c94c1276127d037f09c6",
+  "references/roles/worker/skill/identity.md": "cf47c4d156e0c97bd5b44acf5fb9e9127db167ab",
+  "references/roles/worker/skill/instructions.md": "c8e51a3754042b08c95abc998206259d59192dca",
   "references/sub-skills/roles/pm/task-intake.md": "ab1776529857aab3abf05ad12fd8999426dddd1c"
  },
  "9588_spec.json": {},

@@ -20,6 +20,9 @@ that depend on it. Remediation, in the SAME PR that changes the fragment:
 - spec overruled    -> add ``"superseded_by": <issue>`` to the spec JSON (the
   gate then ignores it permanently; the spec stays as historical record).
 
+A spec naming a composed agent ``CLAUDE.md`` is pinned to the compose sources
+that feed it, not to the generated file (#14171; see ``composed_output_sources``).
+
 Specs absent from the baseline fail the gate too — a new spec enters via
 ``refresh`` so the pairing is always a conscious act, never an implicit pass.
 
@@ -81,6 +84,68 @@ def spec_fragment_paths(spec):
     return out
 
 
+# #14171: a composed agent CLAUDE.md is a generated output. It is rewritten by
+# deploy recomposes (``deploy: recompose <alias> CLAUDE.md``) that no PR owns,
+# so pairing a spec to its blob turned the gate red fleet-wide after every
+# deploy (#14135, #14171). A spec naming one is keyed on the compose SOURCES
+# that feed it instead, so the drift lands on the PR that changes a source.
+# Alias grammar matches compose._V2_ALIAS_RE.
+_COMPOSED_OUTPUT_RE = re.compile(
+    r"^\.squidsquad/([A-Za-z0-9][A-Za-z0-9_.-]*)/CLAUDE\.md$")
+
+
+def composed_output_sources(rel_path):
+    """L1-L3 source paths compose inlines into ``rel_path``, or None.
+
+    None when ``rel_path`` is not a composed agent CLAUDE.md, or when the
+    alias or its sources cannot be resolved. The caller then tracks the file's
+    own blob (the pre-#14171 behavior), so a resolution failure can never
+    silently drop coverage. Mirrors ``compose.deploy_alias_v2``: the v2 link
+    stage's walked sources plus any ``{{include:}}`` targets they expand. The
+    L4 overlay (``.squidsquad/project/<role>.md``) is excluded: it is state-lane
+    content committed direct to main (#11511), so it has no PR to carry a
+    refresh either. A spec that covers L4 text names that file directly.
+    """
+    m = _COMPOSED_OUTPUT_RE.match(rel_path)
+    if not m:
+        return None
+    try:
+        import compose
+        import config
+        import v2_link_stage
+        role_class, l3_domain = config.parse_aliases_registry()[m.group(1)]
+        records = v2_link_stage.collect_sources_for_validation(
+            role_class, l3_domain, repo_root=REPO_ROOT)
+    except Exception:
+        return None
+    out = []
+    for rec in records:
+        if rec.path not in out:
+            out.append(rec.path)
+        for inc in compose._INCLUDE_DIRECTIVE_RE.finditer(rec.body):
+            name = inc.group("path").strip()
+            p = f"references/sub-skills/{name}.md"
+            if (name not in compose.RUNTIME_READ_FRAGMENTS
+                    and (REPO_ROOT / p).is_file() and p not in out):
+                out.append(p)
+    return out or None
+
+
+def tracked_paths(spec):
+    """[(path, via)] the gate pins for a spec. ``via`` names the composed
+    output a source was resolved from, else None (#14171)."""
+    out = []
+    seen = set()
+    for frag in spec_fragment_paths(spec):
+        sources = composed_output_sources(frag)
+        pairs = [(s, frag) for s in sources] if sources else [(frag, None)]
+        for path, via in pairs:
+            if path not in seen:
+                seen.add(path)
+                out.append((path, via))
+    return out
+
+
 def committed_blob_sha(rel_path):
     """Blob sha of the path at HEAD; None if untracked OR git is unavailable/
     hung. Bounded + exception-guarded per the repo's git-subprocess convention
@@ -119,10 +184,11 @@ def check():
     """Returns a list of human-readable violations (empty = clean)."""
     baseline = load_baseline()
     violations = []
+    shas = {}  # one git call per path: composed sources repeat across specs
     for name, spec in load_specs().items():
         if "superseded_by" in spec:
             continue
-        frags = spec_fragment_paths(spec)
+        frags = tracked_paths(spec)
         if not frags:
             continue  # nothing checkable named
         entry = baseline.get(name)
@@ -131,14 +197,33 @@ def check():
                 f"{name}: not in baseline — run comprehension_staleness.py "
                 f"refresh {name}")
             continue
-        for frag in frags:
-            live = committed_blob_sha(frag)
+        for frag, via in frags:
+            if frag not in shas:
+                shas[frag] = committed_blob_sha(frag)
+            live = shas[frag]
             if live is None:
                 continue  # untracked fragment — not a committed-record drift
-            if entry.get(frag) != live:
+            if (via is None and frag not in entry
+                    and _COMPOSED_OUTPUT_RE.match(frag)):
+                # Fallback path against a source-keyed entry: say so, rather
+                # than report a sha drift that never happened.
                 violations.append(
-                    f"{name} <- {frag} changed since last review "
+                    f"{name} <- {frag}: cannot resolve its compose sources "
+                    f"(#14171) — fix the resolution, or refresh {name} to "
+                    f"pin the generated file")
+            elif entry.get(frag) != live:
+                src = f"{frag} (composed into {via})" if via else frag
+                violations.append(
+                    f"{name} <- {src} changed since last review "
                     f"(baseline {str(entry.get(frag))[:9]} != HEAD {live[:9]})")
+        if any(via for _frag, via in frags):
+            # A source deleted or no longer composed in drops out of the
+            # tracked set, so its content left the composed file unreviewed.
+            live_set = {frag for frag, _via in frags}
+            for gone in sorted(set(entry) - live_set):
+                violations.append(
+                    f"{name} <- {gone} no longer tracked (deleted, or no "
+                    f"longer composed in) since last review")
     return violations
 
 
@@ -172,7 +257,7 @@ def refresh(names):
             failed.append(name)
             continue
         entry = {}
-        for frag in spec_fragment_paths(specs[name]):
+        for frag, _via in tracked_paths(specs[name]):
             sha = committed_blob_sha(frag)
             if sha:
                 entry[frag] = sha
