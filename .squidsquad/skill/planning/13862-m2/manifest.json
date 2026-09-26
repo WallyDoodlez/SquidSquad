@@ -1,0 +1,1480 @@
+{
+ "notes": {
+  "decision-agents-never-stop-while-work-pending": {
+   "disposition": "keep",
+   "reason": "Operator-locked, active-status principle governing all agent/human handoffs; durable and generalizes broadly.",
+   "hubs": [
+    "agent-runtime",
+    "harness"
+   ]
+  },
+  "decision-event-bus-architecture-redesign": {
+   "disposition": "keep",
+   "reason": "Active locked architecture decision for event-bus/ack/cursor; still-in-force design authority.",
+   "hubs": [
+    "event-bus",
+    "harness"
+   ]
+  },
+  "decision-phase-4-event-ack-lifecycle-deferred": {
+   "disposition": "merge-into",
+   "target": "decision-event-bus-architecture-redesign",
+   "reason": "Historical deferral this decision explicitly supersedes; unique history folded into target's origin section."
+  },
+  "decision-pid-primary-liveness": {
+   "disposition": "prune",
+   "reason": "Self-declared ARCHIVED/SUPERSEDED by #12492 progress-based liveness; mechanism no longer runtime behavior."
+  },
+  "decision-reboot-kills-child": {
+   "disposition": "prune",
+   "reason": "Wrapper/.pid/.restart-sentinel model superseded by harness intent API and thin_launcher; deprecation tracked #4792."
+  },
+  "learning-activity-liveness-redispatch-must-not-reset-grace": {
+   "disposition": "keep",
+   "reason": "Generalizable rule for any dispatch-relative liveness model, not tied to one incident.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-broadcast-deque-cannot-have-in-stream-gaps": {
+   "disposition": "keep",
+   "reason": "Durable architectural fact preventing re-litigation of an impossible event-bus gap scenario.",
+   "hubs": [
+    "event-bus"
+   ]
+  },
+  "learning-claude-code-http-hooks-block-only-command-hooks-async": {
+   "disposition": "keep",
+   "reason": "Generalizable Claude Code hook-API fact needed for any future hook design, hot-path or cold.",
+   "hubs": [
+    "harness",
+    "agent-runtime"
+   ]
+  },
+  "learning-default-port-fallback-is-live-egress-trap-in-tests": {
+   "disposition": "keep",
+   "reason": "Generalizable test-isolation rule for any harness-HTTP-touching test, still-live hazard class.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts": {
+   "disposition": "merge-into",
+   "target": "learning-deploy-pull-block-divergence-recover-by-merge",
+   "reason": "Sub-case (dirty-tree variant) of the broader deploy-error stage=pull recovery family; folded into target."
+  },
+  "learning-deploy-pull-block-divergence-recover-by-merge": {
+   "disposition": "keep",
+   "reason": "Active recurring recovery runbook for deploy-pull blocks; durable operational pattern.",
+   "hubs": [
+    "compose",
+    "harness"
+   ]
+  },
+  "learning-deploy-signal-boot-drain-residual-vs-live": {
+   "disposition": "keep",
+   "reason": "Generalizable any-role diagnostic distinguishing residual vs live deploy-signal at boot-drain.",
+   "hubs": [
+    "compose",
+    "agent-runtime"
+   ]
+  },
+  "learning-graceful-restart-grace-timer-on-wedged-agent": {
+   "disposition": "keep",
+   "reason": "Refined, still-current PM runbook for restart timing/escalation on wedged agents.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals": {
+   "disposition": "keep",
+   "reason": "Generalizable design pattern for any status-machine death/hold/resume decision with self-reported signals.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-harness-only-ship-restart-required-is-noop": {
+   "disposition": "keep",
+   "reason": "Actively maintained, current ship-time gate distinguishing spurious vs real restart/deploy signals.",
+   "hubs": [
+    "delivery",
+    "compose"
+   ]
+  },
+  "learning-harness-port-59999-is-deliberate-loop-pin": {
+   "disposition": "prune",
+   "reason": "Narrow, situational ops workaround tied to an unresolved bug; single-clone incident, doesn't generalize."
+  },
+  "learning-intent-clear-on-transition-not-liveness": {
+   "disposition": "keep",
+   "reason": "Generalizable rule for any polling reconcile-loop clearing operator intent on edge vs level.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-monitor-persistent-do-not-rearm-per-nudge": {
+   "disposition": "keep",
+   "reason": "All-roles generalizable Monitor lifecycle rule preventing duplicate watcher processes.",
+   "hubs": [
+    "agent-runtime",
+    "event-bus"
+   ]
+  },
+  "learning-polling-agent-reads-as-inert-on-status": {
+   "disposition": "keep",
+   "reason": "Generalizable diagnostic: polling-mode agents falsely read inert on /status; prevents misdiagnosis/reboots.",
+   "hubs": [
+    "harness",
+    "agent-runtime"
+   ]
+  },
+  "learning-post-outage-boot-drain-repeated-assigned-to": {
+   "disposition": "keep",
+   "reason": "Generalizable boot-drain dedup pattern for post-outage assigned-to floods; still-current forge-read approach.",
+   "hubs": [
+    "delivery",
+    "event-bus"
+   ]
+  },
+  "learning-requirements-txt-is-harness-runtime-scoped": {
+   "disposition": "keep",
+   "reason": "Durable dependency-scoping rule preventing future requirements.txt misplacement.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-restarting-intent-not-across-harness-restart": {
+   "disposition": "keep",
+   "reason": "Still-current architecture facts (RESTARTING transient, STOPPING preserved, crash-loop backoff).",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker": {
+   "disposition": "keep",
+   "reason": "Generalizable Claude Code hook-semantics facts plus a durable breaker-design principle.",
+   "hubs": [
+    "harness",
+    "agent-runtime"
+   ]
+  },
+  "learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter": {
+   "disposition": "keep",
+   "reason": "Generalizable event-delivery pattern for any one-shot nudge to a poll-less consumer.",
+   "hubs": [
+    "event-bus"
+   ]
+  },
+  "learning-singleton-must-refuse-not-fallback-when-canonical-port-held": {
+   "disposition": "keep",
+   "reason": "Generalizable systems-design principle: a singleton distributing identity must refuse, not fall back.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-spawn-prompt-must-not-decide-wake-mode": {
+   "disposition": "keep",
+   "reason": "Generalizable single-source-of-truth principle for boot/launcher control-flow decisions.",
+   "hubs": [
+    "launcher",
+    "agent-runtime"
+   ]
+  },
+  "learning-stale-activity-not-dead-rule-out-limit-and-inline": {
+   "disposition": "keep",
+   "reason": "Generalizable ordered diagnostic (inline, usage-limit, wedge) preventing repeat misdiagnosis.",
+   "hubs": [
+    "harness",
+    "agent-runtime"
+   ]
+  },
+  "learning-stall-vs-deepwork-before-nudging": {
+   "disposition": "keep",
+   "reason": "Generalizable liveness-vs-chatter distinction for any long-silent in-progress item before nudging.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-strip-vs-wire-audit-findings": {
+   "disposition": "keep",
+   "reason": "Generalizable meta-lesson/checklist for triaging any 'dormant plumbing' audit finding.",
+   "hubs": [
+    "event-bus"
+   ]
+  },
+  "learning-tests-must-not-mutate-shared-live-state": {
+   "disposition": "keep",
+   "reason": "Generalizable test-isolation rule for any test touching shared runtime-control files.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "pattern-verify-liveness-lifecycle-with-independent-runtime-probe": {
+   "disposition": "keep",
+   "reason": "Reusable verifier technique for any liveness/lifecycle fix, independent of any single incident.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "decision-comprehension-test-pipeline": {
+   "disposition": "keep",
+   "reason": "Durable, still-live two-agent CQ pipeline architecture (spec-driven, deterministic pytest gate) for comprehension testing.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "decision-deterministic-testing": {
+   "disposition": "keep",
+   "reason": "Standing PM/QA rule: test plans executable, verdicts PASS/FAIL/BLOCKED only; foundational to the zero-gap gate.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "decision-tui-headless-render-verification": {
+   "disposition": "keep",
+   "reason": "Operator-approved architectural decision: TUI render verification uses Textual's run_test()/Pilot, not pyte/PTY.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-background-verification-pipe-truncation-masks-verdict": {
+   "disposition": "keep",
+   "reason": "Generalizable rule (echoed in team memory): never pipe backgrounded test runs through tail; redirect to file, trust echoed exit code.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop": {
+   "disposition": "keep",
+   "reason": "Reusable safety rule: bare run_tests.py mutates the real GitHub tracker; TaskStop doesn't guarantee clean teardown.",
+   "hubs": [
+    "verification",
+    "tracker"
+   ]
+  },
+  "learning-branch-checkout-mid-background-test-corrupts-results": {
+   "disposition": "keep",
+   "reason": "Generalizable git-hygiene rule: never checkout/stash/reset while a background test run reads the same working tree.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-canonical-verifier-merge-is-harness-post-merge": {
+   "disposition": "keep",
+   "reason": "Clarifies the canonical interface lock (harness POST /merge vs CLI fallback) plus a durable self-verification lesson on drift direction.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping": {
+   "disposition": "keep",
+   "reason": "Standing role-boundary rule: CQ baseline drift caused by a PR's own diff is that PR's fix, not verifier bookkeeping.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-cq-applies-to-launcher-injected-prompts": {
+   "disposition": "keep",
+   "reason": "Core CQ-scope rule (matches team memory): comprehension testing triggers on any LLM-consumed string regardless of file type.",
+   "hubs": [
+    "verification",
+    "launcher"
+   ]
+  },
+  "learning-cq-artifacts-commit-after-pr-merges-not-before": {
+   "disposition": "keep",
+   "reason": "Generalizable sequencing rule: commit a CQ baseline entry to main only after the underlying PR has actually merged.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-create-test-environments": {
+   "disposition": "keep",
+   "reason": "Standing rule: never declare a TC untestable without first trying a disposable test environment.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-edit-shared-fragment-run-full-static-gate": {
+   "disposition": "keep",
+   "reason": "Reusable verification rule: editing a shared sub-skill fragment requires the full static gate, not just feature tests.",
+   "hubs": [
+    "verification",
+    "compose"
+   ]
+  },
+  "learning-fix-inverting-an-invariant-is-a-regression": {
+   "disposition": "keep",
+   "reason": "Generalizable rule: a fix that inverts an invariant another test hard-codes is a regression, caught only by the full suite.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-gate-collection-abort-masks-reds": {
+   "disposition": "keep",
+   "reason": "Durable false-green pattern (collection abort, zero tests) plus reusable gate-design lessons: auto-discovery, quarantine, verify completion.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-gh-pr-edit-broken-use-gh-api-patch": {
+   "disposition": "keep",
+   "reason": "Durable environment fact and rule: gh pr edit is broken here; route PR mutation through gh api PATCH instead.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-git-ops-helpers-pin-repo-root-not-cwd": {
+   "disposition": "merge-into",
+   "target": "learning-git-ops-tests-patch-repo-root-not-chdir",
+   "reason": "Duplicate REPO_ROOT-patching technique; folds unique #13373 example and the no-op diagnostic heuristic into the target.",
+   "hubs": []
+  },
+  "learning-git-ops-tests-patch-repo-root-not-chdir": {
+   "disposition": "keep",
+   "reason": "Reusable testing technique: patch git_ops.REPO_ROOT, not os.chdir, to exercise git_ops functions against a throwaway clone.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-in-process-handler-daemon-os-exit-kills-test-suite": {
+   "disposition": "keep",
+   "reason": "Reusable test-authoring pattern: join daemon threads inside the patch context so a delayed os._exit can't hard-kill the suite.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "learning-in-process-import-resolution-test-contaminates-suite": {
+   "disposition": "keep",
+   "reason": "Reusable rule: prefer filesystem-level guards over runtime import-resolution assertions, which contaminate the suite via sys.modules.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "learning-prove-regression-test-fails-pre-fix": {
+   "disposition": "keep",
+   "reason": "Standing verification rule: prove a regression test fails against pre-fix code via an isolated worktree before accepting it.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-push-branch-before-triggering-harness-merge": {
+   "disposition": "keep",
+   "reason": "Generalizable sequencing rule: git push local commits before POST /merge; the harness merges the remote tip only.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress": {
+   "disposition": "keep",
+   "reason": "Standing tracker role-authority correction: QA must never transition pending-test to in-progress at pickup, else it deadlocks.",
+   "hubs": [
+    "tracker",
+    "verification"
+   ]
+  },
+  "learning-qa-branch-merge-workaround": {
+   "disposition": "prune",
+   "reason": "Single-incident workaround for a since-tracked QA clone branch-discovery bug (#3361); the mechanism it patches around is stale.",
+   "hubs": []
+  },
+  "learning-raw-pytest-shows-known-failures-use-run-tests-static": {
+   "disposition": "keep",
+   "reason": "Standing rule: run the canonical run_tests.py static gate first, never raw pytest, to avoid false-alarm exclusion-list failures.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-reexecute-evidence-after-verifier-session-loss": {
+   "disposition": "keep",
+   "reason": "Generalizable integrity rule: re-execute evidence after a verifier session dies mid-bookkeeping, never transcribe an unverified claim.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-shell-out-provisioning-has-three-sharp-edges": {
+   "disposition": "keep",
+   "reason": "Reusable checklist for any subprocess-based provisioning code: OSError catch, per-tool non-interactive flags, python2/3 probing.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-sibling-pr-additive-test-conflict-keep-both": {
+   "disposition": "keep",
+   "reason": "Reusable merge pattern: sibling PRs colliding additively on a shared test file resolve as keep-both, not a route-back.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-single-static-gate-red-may-be-flake-rerun-before-reject": {
+   "disposition": "keep",
+   "reason": "Standing triage rule: isolate, re-run, and check surface ownership before treating a single static-gate red as a reject.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-squash-drops-newest-commits-of-ahead-branch": {
+   "disposition": "keep",
+   "reason": "Distinct high-severity squash data-loss variant (ahead branch drops newest commits); durable post-merge diff-verification rule.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-suite-exit-code-not-proof-of-all-pass": {
+   "disposition": "keep",
+   "reason": "Durable false-green principle, now codified in run_tests.py itself; includes an adversarial re-injection technique for guard verification.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-tail-truncation-hides-pytest-failures-from-review": {
+   "disposition": "merge-into",
+   "target": "learning-background-verification-pipe-truncation-masks-verdict",
+   "reason": "Sub-case of the same pipe/tail-truncation family; folds in the reviewer-blind-spot nuance and the lastfailed recovery tip.",
+   "hubs": []
+  },
+  "learning-verify-absent-claims-need-fresh-fetch-all-refs": {
+   "disposition": "keep",
+   "reason": "Standing rule: fetch refs fresh immediately before asserting an artifact is absent from all refs.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-verify-combined-state-when-branch-behind-main-shares-files": {
+   "disposition": "keep",
+   "reason": "Reusable merge-safety checklist for behind branches sharing files with merged siblings, with a live safety amendment.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-verify-deletion-task-by-repo-wide-consumer-sweep": {
+   "disposition": "keep",
+   "reason": "Reusable verification technique: a repo-wide grep sweep for a deleted/moved artifact's name catches missed doc consumers.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-verify-instruction-premises-against-code-not-just-comprehension": {
+   "disposition": "keep",
+   "reason": "Standing rule: the comprehension gate proves clarity only; fact-check an instruction's factual premises against the actual code.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-verify-squash-diff-additions-only-behind-branch": {
+   "disposition": "keep",
+   "reason": "Distinct SEV-1 squash data-loss variant (behind branch reverts fleet work); durable pre-merge diff-sanity rule.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "pattern-parallel-axis-audit": {
+   "disposition": "keep",
+   "reason": "Reusable audit methodology: spawn one subagent per orthogonal coupling axis for large-artifact verification.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "pattern-prove-side-effect-absence-via-live-state-snapshot": {
+   "disposition": "keep",
+   "reason": "Reusable technique: prove a side-effect's removal via a live shared-state before/after snapshot, independent of the fix's own guard.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "pattern-replay-fix-against-real-incident-not-just-mocks": {
+   "disposition": "keep",
+   "reason": "Reusable technique: replay an incident fix's detection function live against the real historical artifact, not just mocks.",
+   "hubs": [
+    "verification",
+    "pr-merge"
+   ]
+  },
+  "pattern-resolve-config-against-live-install-not-test-fixture": {
+   "disposition": "keep",
+   "reason": "Reusable technique: resolve config/registry fixes against the real live install, not the test's fixture registry.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "pattern-retroactive-verify-emergency-fixes-on-main": {
+   "disposition": "keep",
+   "reason": "Standing rule: emergency fixes shipped straight to main still owe full QA verification and usually lack regression tests.",
+   "hubs": [
+    "verification",
+    "delivery"
+   ]
+  },
+  "pattern-trace-data-reads-not-just-grep-literal-strings-for-leakage-claims": {
+   "disposition": "keep",
+   "reason": "Reusable technique: trace actual data-read paths, not literal-string grep, to verify no-leakage/isolation claims.",
+   "hubs": [
+    "verification",
+    "compose"
+   ]
+  },
+  "pattern-update-stale-test-on-behavior-reversal": {
+   "disposition": "keep",
+   "reason": "Reusable pattern: update the old regression test in-place, not delete, when a fix deliberately reverses prior behavior.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "pattern-verify-egress-guard-on-the-wire": {
+   "disposition": "keep",
+   "reason": "Reusable A/B live-server technique: verify a test-isolation/egress guard on the wire, not by its own assertions.",
+   "hubs": [
+    "verification",
+    "event-bus"
+   ]
+  },
+  "pattern-verify-new-shipped-file-in-installer-manifest": {
+   "disposition": "keep",
+   "reason": "Reusable verification check: new runtime files under references/ must reach installer-files.txt, not just the repo.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "pattern-verify-unmocked-paths-stubbed-by-units": {
+   "disposition": "keep",
+   "reason": "Reusable technique: live-exercise the exact external-boundary paths a unit suite mocks to close the mock-vs-real gap.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "pattern-windows-utf8-subprocess": {
+   "disposition": "keep",
+   "reason": "Durable, still-applicable coding pattern: force utf-8/errors=replace on subprocess and stdout/stderr encoding on Windows.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-bash-cd-into-missing-worktree-runs-in-main-clone": {
+   "disposition": "keep",
+   "reason": "Load-bearing Windows worktree gotcha (silent cd failure runs recompose in main clone); cited by two other kept notes.",
+   "hubs": [
+    "compose",
+    "delivery"
+   ]
+  },
+  "learning-commit-before-merge-when-inheriting-dirty-behind-clone": {
+   "disposition": "keep",
+   "reason": "Durable boot rule: commit local state before merging when clone is both dirty and far behind origin/main.",
+   "hubs": [
+    "delivery",
+    "agent-runtime"
+   ]
+  },
+  "learning-config-merge-ours-drops-concurrent-changes": {
+   "disposition": "prune",
+   "reason": "Explicitly superseded by #12823; config.md merge=ours removed so the described mechanism no longer exists.",
+   "hubs": []
+  },
+  "learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep": {
+   "disposition": "keep",
+   "reason": "Durable recompose-staleness methodology: verify via fresh isolated-worktree compose zero-diff, never behind-clone grep.",
+   "hubs": [
+    "compose",
+    "delivery"
+   ]
+  },
+  "learning-confirm-merge-landed-before-pending-ship-transition": {
+   "disposition": "keep",
+   "reason": "Standing verifier discipline: never chain pr-merge with the pending-ship transition; confirm merge landed, check draft status.",
+   "hubs": [
+    "verification",
+    "pr-merge"
+   ]
+  },
+  "learning-dm-local-merge-when-harness-down": {
+   "disposition": "keep",
+   "reason": "Current fallback recipe for shipping when the harness merge endpoint is unreachable, plus a draft-PR corollary.",
+   "hubs": [
+    "pr-merge",
+    "delivery"
+   ]
+  },
+  "learning-git-cat-file-ref-path-false-negative-use-ls-tree": {
+   "disposition": "prune",
+   "reason": "Single-incident, uncited tool quirk; the cross-check-surprising-git-facts lesson is already covered by other kept notes.",
+   "hubs": []
+  },
+  "learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown": {
+   "disposition": "keep",
+   "reason": "Distinct severe mechanism: line-based git merge on hand-authored prose silently drops deletions, no conflict shown.",
+   "hubs": [
+    "vault",
+    "delivery"
+   ]
+  },
+  "learning-git-ops-run-pins-repo-root-ignores-chdir": {
+   "disposition": "keep",
+   "reason": "Structural git_ops.py hazard: _run pins REPO_ROOT, so chdir-based smoke tests mutate the live repo/shared stash.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-git-show-ref-path-mangled-on-windows-bash": {
+   "disposition": "keep",
+   "reason": "Foundational Windows/MSYS git-show fact cited by other kept notes; use HEAD:/SHA: form, not ref-with-slash.",
+   "hubs": [
+    "delivery",
+    "verification"
+   ]
+  },
+  "learning-harness-merge-gate-caches-git-ops-module": {
+   "disposition": "keep",
+   "reason": "Distinct, still-open harness bug: in-process git_ops module caching causes false merge refusals after a fix lands.",
+   "hubs": [
+    "harness",
+    "pr-merge"
+   ]
+  },
+  "learning-harness-pr-merge-does-not-sync-local-clone": {
+   "disposition": "keep",
+   "reason": "Durable rule: harness-mediated merges never update the local clone; pull before any repo-content-dependent step.",
+   "hubs": [
+    "harness",
+    "delivery"
+   ]
+  },
+  "learning-instructions-md-frontmatter-step-ids-not-inlined-no-recompose-needed": {
+   "disposition": "keep",
+   "reason": "Durable compose classification rule: instructions.md YAML frontmatter isn't inlined into composed output, so no recompose needed.",
+   "hubs": [
+    "compose",
+    "delivery"
+   ]
+  },
+  "learning-l4-only-fix-skips-pr-flow": {
+   "disposition": "keep",
+   "reason": "Still-open structural gap in cycle_post.py's path-based code/state classifier; cited by a kept verification pattern.",
+   "hubs": [
+    "pr-merge",
+    "compose"
+   ]
+  },
+  "learning-merge-driver-defeated-by-delete-not-modify": {
+   "disposition": "keep",
+   "reason": "Severe, generalizable gotcha: merge=ours/union never fires on modify-vs-delete, silently defeating protection with zero signal.",
+   "hubs": [
+    "pr-merge",
+    "vault"
+   ]
+  },
+  "learning-merge-mechanism-fix-cannot-protect-its-own-landing-commit": {
+   "disposition": "keep",
+   "reason": "Generalizable bootstrap-paradox principle for verifying any merge-mechanism fix, distinct from caching or logic bugs.",
+   "hubs": [
+    "pr-merge",
+    "verification"
+   ]
+  },
+  "learning-powershell-start-job-cwd": {
+   "disposition": "prune",
+   "reason": "Narrow, uncited single-incident Windows Start-Job cwd quirk from an old (2026-04-18) boot-wrapper fix.",
+   "hubs": []
+  },
+  "learning-pr-conflicting-flag-can-be-cosmetic": {
+   "disposition": "keep",
+   "reason": "Heavily corrected, cross-referenced root cause: GitHub's CONFLICTING flag on merge=ours files is a server-side no-op.",
+   "hubs": [
+    "pr-merge"
+   ]
+  },
+  "learning-pr-create-must-run-on-feature-branch-after-commit-code": {
+   "disposition": "keep",
+   "reason": "Current git_ops.py API gotcha: pr-create takes 2 args and runs on whatever branch commit-code left checked out.",
+   "hubs": [
+    "pr-merge"
+   ]
+  },
+  "learning-read-all-comments-before-merge-not-just-transition": {
+   "disposition": "keep",
+   "reason": "Standing verifier discipline: operator holds can land before pickup; treat the merge, not the transition, as the point of no return.",
+   "hubs": [
+    "verification",
+    "pr-merge"
+   ]
+  },
+  "learning-resume-git-tree-is-truth": {
+   "disposition": "keep",
+   "reason": "General resume principle: git tree beats working-state.md when the harness-down cycle_post wrapper never fired.",
+   "hubs": [
+    "agent-runtime"
+   ]
+  },
+  "learning-ship-counter-canonical-key": {
+   "disposition": "keep",
+   "reason": "Describes the current (post-#12823) ship-counter mechanism and its canonical-key gotcha; still in force.",
+   "hubs": [
+    "delivery"
+   ]
+  },
+  "learning-ship-gate-squash-proof-window": {
+   "disposition": "keep",
+   "reason": "Distinct ship-gate false-block cause (20-PR bypass window aged out); fix is deleting the superseded branch.",
+   "hubs": [
+    "pr-merge",
+    "delivery"
+   ]
+  },
+  "learning-stale-remote-tracking-ref-blocks-ship-gate": {
+   "disposition": "keep",
+   "reason": "Distinct ship-gate false-block cause (stale local tracking ref); fix is prune/force-refspec fetch, never branch deletion.",
+   "hubs": [
+    "pr-merge",
+    "delivery"
+   ]
+  },
+  "learning-state-lane-deletion-never-rides-commit-it-now": {
+   "disposition": "keep",
+   "reason": "Core #11511-guard rule: state-lane deletions/additions must be verified landed or committed directly, never assumed.",
+   "hubs": [
+    "tracker",
+    "delivery"
+   ]
+  },
+  "learning-verifier-verdict-may-be-off-forge-confirm-before-routeback": {
+   "disposition": "keep",
+   "reason": "General facts-over-context ship-gate rule: no forge verdict isn't proof of FAIL; corroborate before routing back.",
+   "hubs": [
+    "delivery",
+    "verification"
+   ]
+  },
+  "learning-windows-cmd-start-title-must-be-quoted": {
+   "disposition": "keep",
+   "reason": "Concrete launcher spawn bug (unquoted title breaks cmd/start) that passed a green test suite; DS-review meta-lesson.",
+   "hubs": [
+    "launcher"
+   ]
+  },
+  "pattern-chain-ship-per-item-auth": {
+   "disposition": "keep",
+   "reason": "Established governance pattern with multi-issue precedent for per-item bundle chain-ship authorization; still in force.",
+   "hubs": [
+    "delivery",
+    "tracker"
+   ]
+  },
+  "pattern-dm-citation-soft-gate-satisfied-for-qa-bugs": {
+   "disposition": "keep",
+   "reason": "Established, twice-applied pattern for judging the citation soft gate satisfied on qa-reported bugs lacking PM context.",
+   "hubs": [
+    "delivery"
+   ]
+  },
+  "pattern-dm-completes-stuck-in-progress-after-qa-pass": {
+   "disposition": "keep",
+   "reason": "Established pattern for DM completing a qa mis-transition via the #6261 skip-path; precedent applied on #13556.",
+   "hubs": [
+    "delivery",
+    "tracker"
+   ]
+  },
+  "pattern-event-mode-release-bump-via-worktree": {
+   "disposition": "keep",
+   "reason": "Proven, detailed release-bump recipe for event mode via isolated worktree; still the current release procedure.",
+   "hubs": [
+    "delivery",
+    "compose"
+   ]
+  },
+  "pattern-inspect-merge-stat-before-ship-revert-to-recover": {
+   "disposition": "keep",
+   "reason": "Critical pattern (first seen #13271): inspect merge stat before shipping; revert via worktree on fleet-wide regression.",
+   "hubs": [
+    "pr-merge",
+    "delivery"
+   ]
+  },
+  "pattern-no-fiction-window-main-landing-delivery": {
+   "disposition": "keep",
+   "reason": "Core DM delivery pattern for applying stripped .squidsquad/ state on main in the same window as the merge.",
+   "hubs": [
+    "delivery",
+    "compose"
+   ]
+  },
+  "pattern-runtime-loaded-subskill-change-no-recompose": {
+   "disposition": "keep",
+   "reason": "Core compose classification pattern: inlined vs runtime-loaded sub-skills determine if a change needs recompose+reboot.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "pattern-ship-gate-preserve-expanded-scope": {
+   "disposition": "keep",
+   "reason": "Established pattern preventing orphaned operator scope when the ship gate closes an issue narrower than mid-flight expansion.",
+   "hubs": [
+    "delivery",
+    "tracker"
+   ]
+  },
+  "pattern-verify-composed-output-with-main-landing-state-applied": {
+   "disposition": "keep",
+   "reason": "Core verification-side complement: apply main-landing state to the branch before inspecting composed-output ACs.",
+   "hubs": [
+    "verification",
+    "compose"
+   ]
+  },
+  "decision-branch-per-feature-workflow": {
+   "disposition": "keep",
+   "reason": "Active architecture: code on feature branches, state on main via git_ops commit-code/commit-state; still governs branch workflow.",
+   "hubs": [
+    "pr-merge"
+   ]
+  },
+  "decision-class-vs-alias-routing-model": {
+   "disposition": "keep",
+   "reason": "Current routing architecture: alias-based /work/assign, no harness permission table; wire-format and mis-route recovery in force.",
+   "hubs": [
+    "harness",
+    "tracker"
+   ]
+  },
+  "decision-clone-isolation-architecture": {
+   "disposition": "keep",
+   "reason": "Core safety architecture: per-agent clones, project-local paths; local-config-priority sub-decision folded in.",
+   "hubs": [
+    "launcher",
+    "harness"
+   ]
+  },
+  "decision-cycle-runner-architecture": {
+   "disposition": "keep",
+   "reason": "Foundational cycle_pre/cycle_post mechanical-shell split still live since v0.33.0+, referenced by later event-driven work.",
+   "hubs": [
+    "agent-runtime"
+   ]
+  },
+  "decision-general-purpose-vision": {
+   "disposition": "keep",
+   "reason": "Standing product vision (Forgejo backend, non-technical team presets) shaping the bus-provider abstraction design.",
+   "hubs": [
+    "tracker"
+   ]
+  },
+  "decision-improvement-loop-philosophy": {
+   "disposition": "keep",
+   "reason": "Active four-layer improvement/vault-synthesis model with approval tiers still governing scan behavior.",
+   "hubs": [
+    "vault"
+   ]
+  },
+  "decision-local-config-priority": {
+   "disposition": "merge-into",
+   "target": "decision-clone-isolation-architecture",
+   "reason": "Sub-case of clone-isolation: same #2750 clone-path incident, narrower _parse_local_config priority-order detail."
+  },
+  "decision-self-healing-sentinel": {
+   "disposition": "keep",
+   "reason": "Two-tier self-healing sentinel design (unstick + root-cause bug filing) validated live via #1396/#1405 loop.",
+   "hubs": [
+    "delivery",
+    "tracker"
+   ]
+  },
+  "decision-sub-skill-architecture": {
+   "disposition": "keep",
+   "reason": "Current compose architecture: main skill plus role/common/capability sub-skills, build-time concatenation into CLAUDE.md.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "decision-vault-remember-source-agnostic": {
+   "disposition": "keep",
+   "reason": "Standing rule: vault reflection evaluates all signal sources, not just human input, across every category.",
+   "hubs": [
+    "vault"
+   ]
+  },
+  "decision-vault-subagent-model-sonnet": {
+   "disposition": "keep",
+   "reason": "Active model-pinning decision for heavy vault sub-skills (sonnet tier), consistent with skill/DM subagent precedent.",
+   "hubs": [
+    "vault"
+   ]
+  },
+  "decision-watchdog-supervisor": {
+   "disposition": "keep",
+   "reason": "Current centralized lifecycle design: watchdog.py owns health/boot/context-pressure/template restarts; agents are dumb workers.",
+   "hubs": [
+    "harness",
+    "launcher"
+   ]
+  },
+  "learning-atomic-migration-strategy": {
+   "disposition": "keep",
+   "reason": "Reusable pattern: ship foundational infra migrations atomically in one cycle to avoid agent-coordination races.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "learning-audit-scope-and-source-of-truth": {
+   "disposition": "keep",
+   "reason": "Reusable audit method: verify a flagged premise doc-wide and use code, not the cross-doc delta, as tiebreaker.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-backtick-in-bash-doublequote-can-actually-execute": {
+   "disposition": "keep",
+   "reason": "Critical cross-role gotcha: backticks in double-quoted Bash args can execute for real; write-to-file mitigation still needed.",
+   "hubs": [
+    "tracker",
+    "pr-merge"
+   ]
+  },
+  "learning-bundle-branch-reconciliation": {
+   "disposition": "keep",
+   "reason": "Reusable checklist for long-held-branch cutovers: favor restructure side, recompose don't hand-merge, union manifests.",
+   "hubs": [
+    "pr-merge",
+    "compose"
+   ]
+  },
+  "learning-closing-keyword-in-state-commit-autocloses-issue": {
+   "disposition": "keep",
+   "reason": "Ongoing bug-class record (commit/PR-body/single-commit-squash variants) with current hand-discipline rule still required.",
+   "hubs": [
+    "pr-merge",
+    "delivery"
+   ]
+  },
+  "learning-commit-code-state-exclusion": {
+   "disposition": "keep",
+   "reason": "Current commit-code gotcha: .squidsquad/.claude paths excluded from feature branches; code there needs manual staging.",
+   "hubs": [
+    "pr-merge"
+   ]
+  },
+  "learning-commit-role-scoped-foreign-file-silent-drop": {
+   "disposition": "keep",
+   "reason": "Live gotcha: commit_role_scoped drops non-allowlisted agent files as 'foreign' silently; fix is a scoped allowlist addition.",
+   "hubs": [
+    "agent-runtime",
+    "pr-merge"
+   ]
+  },
+  "learning-common-events-fragments-are-mode-agnostic": {
+   "disposition": "keep",
+   "reason": "Active test-guard rules for editing common-events fragments: forbidden loop-mode tokens, wikilink scope restriction.",
+   "hubs": [
+    "compose",
+    "agent-runtime"
+   ]
+  },
+  "learning-compose-engine-change-no-claudemd-recompose": {
+   "disposition": "keep",
+   "reason": "Current classification rule for compose-engine changes that emit settings.json without changing composed CLAUDE.md.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "learning-comprehension-staleness-refresh-cli-silent-failure": {
+   "disposition": "prune",
+   "reason": "Single CLI-arg mistake (bare issue# vs spec filename); narrow, root-cause bug already filed as #13710."
+  },
+  "learning-cycle-pre-preserves-code-wip": {
+   "disposition": "keep",
+   "reason": "Current behavior: cycle_pre auto-preserves code WIP across context-pressure reboots since #12142; still governs reboot handling.",
+   "hubs": [
+    "agent-runtime"
+   ]
+  },
+  "learning-doc-first-for-architecture-changes": {
+   "disposition": "keep",
+   "reason": "Standing process rule: architecture-level changes need a human-reviewed TRD before implementation, not a retrofitted doc.",
+   "hubs": [
+    "harness"
+   ]
+  },
+  "learning-ead-status-routing-and-back-transition-dedup": {
+   "disposition": "keep",
+   "reason": "Current event-routing design rules: route by status to role-class, dedup by last-status-per-issue to avoid starvation.",
+   "hubs": [
+    "event-bus",
+    "harness"
+   ]
+  },
+  "learning-fail-open-claims-need-real-reader-tests": {
+   "disposition": "keep",
+   "reason": "Reusable verification technique: test fail-open claims against the real reader; except Exception misses SystemExit.",
+   "hubs": [
+    "verification",
+    "harness"
+   ]
+  },
+  "learning-gh-issue-list-hardcoded-limit-silently-truncates": {
+   "disposition": "keep",
+   "reason": "Systemic, recurring gh-cli --limit truncation bug class across four call sites; still a live risk pattern.",
+   "hubs": [
+    "tracker"
+   ]
+  },
+  "learning-git-ops-clean-tree-stash-pop-recovery": {
+   "disposition": "keep",
+   "reason": "Reusable recovery procedure for the still-open git_ops stash-pop bug (#13167) breaking compose via config.py.",
+   "hubs": [
+    "compose",
+    "pr-merge"
+   ]
+  },
+  "learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate": {
+   "disposition": "keep",
+   "reason": "Generalizable rule: any force/override mutation must reconcile live state, not trust the caller-claimed current state.",
+   "hubs": [
+    "tracker"
+   ]
+  },
+  "learning-includes-yml-tombstoned-instructions-md-is-real-compose-source": {
+   "disposition": "keep",
+   "reason": "Current architecture fact: includes.yml is dead code; instructions.md is the real compose source to verify wiring.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "learning-migration-6274-cutover": {
+   "disposition": "prune",
+   "reason": "One-off completed rename migration (dev->worker, qa->verifier); cutover date passed, dual-shim mechanism retired."
+  },
+  "learning-narrowed-ship-scope-orphans-residual-asks": {
+   "disposition": "keep",
+   "reason": "Generalizable pattern: narrowed ship scope must route residual asks to a tracked ticket, not a comment.",
+   "hubs": [
+    "delivery",
+    "tracker"
+   ]
+  },
+  "learning-pending-ship-query-includes-closed": {
+   "disposition": "keep",
+   "reason": "Tracker query gotcha still in force: list-issues vs list-tasks split by type; root cause fixed but split remains.",
+   "hubs": [
+    "tracker",
+    "delivery"
+   ]
+  },
+  "learning-plan-in-pr-needs-state-guard-exemption": {
+   "disposition": "keep",
+   "reason": "Guard-local carve-out for plan-in-PR is the active exemption pattern; also documents seed-commit dual-landing auto-close failure.",
+   "hubs": [
+    "pr-merge"
+   ]
+  },
+  "learning-quarantine-clear-triage-stale-vs-blocked": {
+   "disposition": "keep",
+   "reason": "Generalizable triage method for any quarantine/xfail backlog: classify stale vs blocked-on-open-work before un-quarantining.",
+   "hubs": [
+    "verification"
+   ]
+  },
+  "learning-recompose-and-config-carry-across-checkout": {
+   "disposition": "keep",
+   "reason": "Durable verifier checklist: git checkout carries dirty config/composed files forward; always verify clean tree after checkout.",
+   "hubs": [
+    "compose",
+    "verification"
+   ]
+  },
+  "learning-reverify-transition-blocked-by-own-prior-reject": {
+   "disposition": "keep",
+   "reason": "Standing rule for verifier re-verify loop: force only past your own already-resolved reject, never unread third-party feedback.",
+   "hubs": [
+    "tracker",
+    "verification"
+   ]
+  },
+  "learning-runtime-resolves-by-alias-not-role-class": {
+   "disposition": "keep",
+   "reason": "Foundational fact: every runtime consumer resolves agents by alias not role-class; recurring bug source at every emit site.",
+   "hubs": [
+    "harness",
+    "compose"
+   ]
+  },
+  "learning-scan-comment-vs-file-duplicate": {
+   "disposition": "keep",
+   "reason": "Durable methodology for improvement-scan triage: audit-extend an existing issue instead of filing a parallel duplicate.",
+   "hubs": [
+    "tracker"
+   ]
+  },
+  "learning-sequential-phase-gates-are-prose-only-not-mechanical": {
+   "disposition": "keep",
+   "reason": "Standing architecture constraint: PRD phase gates are prose-only since blocked-status is assignee-only; worker must self-check.",
+   "hubs": [
+    "tracker"
+   ]
+  },
+  "learning-shared-fragment-reword-stales-specs-beyond-the-issue": {
+   "disposition": "keep",
+   "reason": "Durable compose gotcha: editing a shared fragment invalidates every comprehension spec touching it, not just the issue's own spec.",
+   "hubs": [
+    "compose",
+    "verification"
+   ]
+  },
+  "learning-silent-gate-inertness-masks-format-drift": {
+   "disposition": "keep",
+   "reason": "Generalizable gate-design lesson: a never-bypassed gate is only as strong as its file-discovery logic; inertness compounds silently.",
+   "hubs": [
+    "verification",
+    "tracker"
+   ]
+  },
+  "learning-stale-source-recompose-reverts-shipped-on-behind-clone": {
+   "disposition": "keep",
+   "reason": "Still-relevant backstop procedure for behind-clone recompose reverts; root cause hardened but boot/DM catch checks remain load-bearing.",
+   "hubs": [
+    "compose",
+    "harness"
+   ]
+  },
+  "learning-sub-skill-splitting-does-not-reduce-composed-boot-size": {
+   "disposition": "keep",
+   "reason": "Durable compose-pipeline fact: sub-skill splitting only cuts per-cycle re-read cost, never composed CLAUDE.md boot size.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "learning-targetable-step-anchors-must-be-bare-h3": {
+   "disposition": "keep",
+   "reason": "Standing authoring rule for L3/L4-overridable spines: step anchors must be bare H3 to be R5-targetable and processor-findable.",
+   "hubs": [
+    "compose"
+   ]
+  },
+  "learning-task-begin-does-not-auto-create-pr-for-bugs": {
+   "disposition": "keep",
+   "reason": "Standing process rule: self-filed bugs picked up via task-begin need explicit pr-create before pending-test; no auto-PR exists.",
+   "hubs": [
+    "pr-merge"
+   ]
+  },
+  "learning-test-pollution-real-clone-state": {
+   "disposition": "keep",
+   "reason": "Durable branch-hygiene rule: integration tests dirty real-clone state files; always restore them before any manual feature-branch commit.",
+   "hubs": [
+    "verification",
+    "pr-merge"
+   ]
+  },
+  "learning-trd-v2-rewrite-crossref-drift-dominant-defect": {
+   "disposition": "prune",
+   "reason": "Single-incident TRD-rewrite audit finding; niche doc-hygiene lesson not tied to any hub domain, low reuse likelihood."
+  },
+  "learning-trivial-append-conflicts-still-route-to-worker": {
+   "disposition": "keep",
+   "reason": "Durable role-boundary rule: even trivially-resolvable code merge conflicts must route back to worker, never verifier-resolved.",
+   "hubs": [
+    "verification",
+    "pr-merge"
+   ]
+  },
+  "learning-wire-format-specs-triplicated-across-trds": {
+   "disposition": "keep",
+   "reason": "Durable doc-maintenance rule: event-bus wire-format contracts live in three places; fixing one signals checking the other two.",
+   "hubs": [
+    "event-bus",
+    "harness"
+   ]
+  },
+  "pattern-deterministic-scripts-over-prose": {
+   "disposition": "keep",
+   "reason": "Foundational, still-in-force pattern: replace multi-branch prose instructions with deterministic scripts for reliable agent behavior.",
+   "hubs": [
+    "agent-runtime"
+   ]
+  },
+  "pattern-model-router-architecture": {
+   "disposition": "keep",
+   "reason": "Active architecture pattern for multi-model subagent routing; PID-liveness and exit-code fallback contract still referenced in practice.",
+   "hubs": [
+    "harness",
+    "verification"
+   ]
+  },
+  "pattern-operator-comms-no-internal-mechanics": {
+   "disposition": "keep",
+   "reason": "Standing style rule: default operator-facing text is mechanics-free outcome language; jargon reserved for verbose mode.",
+   "hubs": [
+    "delivery",
+    "agent-runtime"
+   ]
+  },
+  "pattern-stale-ac-vs-canonical-arch": {
+   "disposition": "keep",
+   "reason": "Durable resolution pattern for AC-vs-arch contradictions: find the correctness tie-breaker, get operator ratification, reframe ACs via comment.",
+   "hubs": [
+    "tracker"
+   ]
+  },
+  "code-conventions": {
+   "disposition": "keep",
+   "reason": "Durable area note: living record of project file/tracker/git conventions, kept current via role updates.",
+   "hubs": [
+    "tracker",
+    "vault"
+   ]
+  },
+  "human-profile": {
+   "disposition": "keep",
+   "reason": "Durable area note: human preferences and product philosophy, actively updated as decisions supersede prior entries.",
+   "hubs": [
+    "agent-runtime",
+    "harness"
+   ]
+  },
+  "agent-communication-layer": {
+   "disposition": "keep",
+   "reason": "Project note for the decided real-time comms architecture; foundational scope note, kept per area/project default.",
+   "hubs": [
+    "vault"
+   ]
+  },
+  "squidsquad": {
+   "disposition": "keep",
+   "reason": "Core project overview note; foundational context kept current across version history.",
+   "hubs": [
+    "compose",
+    "tracker"
+   ]
+  },
+  "cli-anything-research": {
+   "disposition": "keep",
+   "reason": "Resource research spike on agent-controllable GUI tooling; kept as reusable reference/decision-framework resource.",
+   "hubs": [
+    "launcher"
+   ]
+  },
+  "briefing-active-priorities-2026-06-15-to-07-17": {
+   "disposition": "keep",
+   "reason": "Archived BRIEFING Active Priorities graduation (2026-06-15 to 07-17); retired verbatim audit record."
+  },
+  "briefing-active-priorities-2026-07-18": {
+   "disposition": "keep",
+   "reason": "Archived BRIEFING Active Priorities graduation (2026-07-18); retired verbatim audit record."
+  },
+  "briefing-active-priorities-2026-07-19": {
+   "disposition": "keep",
+   "reason": "Archived BRIEFING Active Priorities graduation (2026-07-19); retired verbatim audit record; no frontmatter present."
+  },
+  "shipped-2026-05-19-to-2026-06-21": {
+   "disposition": "keep",
+   "reason": "Archived BRIEFING Recently Shipped graduation (2026-05-19 to 06-21); retired verbatim audit record."
+  },
+  "shipped-pre-2026-05-19": {
+   "disposition": "keep",
+   "reason": "Archived BRIEFING Recently Shipped graduation (pre-2026-05-19); retired verbatim audit record."
+  },
+  "compose": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  },
+  "event-bus": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  },
+  "harness": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  },
+  "launcher": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  },
+  "pr-merge": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  },
+  "tracker": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  },
+  "vault": {
+   "disposition": "keep",
+   "reason": "system hub (VAULT-ARCH 3.2)",
+   "hubs": []
+  }
+ },
+ "merged_drafts": {
+  "decision-event-bus-architecture-redesign": "drafts/decision-event-bus-architecture-redesign.md",
+  "learning-deploy-pull-block-divergence-recover-by-merge": "drafts/learning-deploy-pull-block-divergence-recover-by-merge.md",
+  "learning-background-verification-pipe-truncation-masks-verdict": "drafts/learning-background-verification-pipe-truncation-masks-verdict.md",
+  "learning-git-ops-tests-patch-repo-root-not-chdir": "drafts/learning-git-ops-tests-patch-repo-root-not-chdir.md",
+  "decision-clone-isolation-architecture": "drafts/decision-clone-isolation-architecture.md",
+  "compose": "hubs/compose-body.md",
+  "event-bus": "hubs/event-bus-body.md",
+  "harness": "hubs/harness-body.md",
+  "launcher": "hubs/launcher-body.md",
+  "pr-merge": "hubs/pr-merge-body.md",
+  "tracker": "hubs/tracker-body.md",
+  "vault": "hubs/vault-body.md"
+ },
+ "add_tags": {
+  "learning-merge-driver-defeated-by-delete-not-modify": [
+   "git",
+   "merge-drivers",
+   "data-loss"
+  ],
+  "learning-fail-open-claims-need-real-reader-tests": [
+   "testing",
+   "fail-open",
+   "systemexit"
+  ],
+  "briefing-active-priorities-2026-07-19": [
+   "shipped",
+   "briefing-graduate",
+   "historical"
+  ]
+ },
+ "new_hubs": {
+  "verification": "hubs/verification.md",
+  "delivery": "hubs/delivery.md",
+  "agent-runtime": "hubs/agent-runtime.md"
+ },
+ "link_fixes": {
+  "BRIEFING": {
+   "project_subskills_not_skills": null,
+   "project_marketplace": null
+  },
+  "decision-class-vs-alias-routing-model": {
+   "AGENT-RUNTIME": null,
+   "VAULT-ARCH": null
+  },
+  "decision-vault-subagent-model-sonnet": {
+   "feedback_skill_sonnet_subagents": null,
+   "feedback_dm_sonnet_subagents": null,
+   "VAULT-ARCH": null
+  },
+  "learning-canonical-verifier-merge-is-harness-post-merge": {
+   "feedback_verify_against_planning_artifacts": null
+  },
+  "learning-closing-keyword-in-state-commit-autocloses-issue": {
+   "feedback_qa_transition_path": null,
+   "feedback_stacked_pr_auto_close": null,
+   "feedback_heredoc_timestamp_no_expand": null
+  },
+  "learning-common-events-fragments-are-mode-agnostic": {
+   "self-restart": null,
+   "name": null,
+   "feedback_full_static_gate_not_subset": null
+  },
+  "learning-config-merge-ours-drops-concurrent-changes": {
+   "feedback_merge_spiral_volatile_file": null
+  },
+  "learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts": {
+   "#13030": null
+  },
+  "learning-deploy-pull-block-divergence-recover-by-merge": {
+   "feedback_never_rebase_merge_instead": null,
+   "learning-deploy-pull-block-recover-by-discarding-composed-artifacts": "learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts",
+   "#13030": null
+  },
+  "learning-gh-issue-list-hardcoded-limit-silently-truncates": {
+   "feedback_trust_script_output": null
+  },
+  "learning-gh-pr-edit-broken-use-gh-api-patch": {
+   "feedback_qa_verification_approach": null
+  },
+  "learning-git-ops-helpers-pin-repo-root-not-cwd": {
+   "feedback_qa_verification_approach": null
+  },
+  "learning-git-ops-tests-patch-repo-root-not-chdir": {
+   "feedback_qa_verification_approach": null
+  },
+  "learning-graceful-restart-grace-timer-on-wedged-agent": {
+   "feedback_harness_sole_lifecycle": null
+  },
+  "learning-post-outage-boot-drain-repeated-assigned-to": {
+   "forge-read-pattern": null
+  },
+  "learning-pr-conflicting-flag-can-be-cosmetic": {
+   "gitattributes_for_transient_state": null
+  },
+  "learning-read-all-comments-before-merge-not-just-transition": {
+   "feedback_verify_against_planning_artifacts": null,
+   "feedback_verify_fresh_fetch_all_refs": null
+  },
+  "learning-sequential-phase-gates-are-prose-only-not-mechanical": {
+   "idle-cooldown-loop": null,
+   "project_trd_prd_delivery_model": null,
+   "feedback_harness_sole_lifecycle": null
+  },
+  "learning-ship-counter-canonical-key": {
+   "feedback_ship_counter_manual": null
+  },
+  "learning-sibling-pr-additive-test-conflict-keep-both": {
+   "feedback_verify_fresh_fetch_all_refs": null,
+   "feedback_no_double_transition": null
+  },
+  "learning-stale-activity-not-dead-rule-out-limit-and-inline": {
+   "feedback_minimal_repro_over_symptom_match": null
+  },
+  "learning-stale-source-recompose-reverts-shipped-on-behind-clone": {
+   "feedback_never_rebase_merge_instead": null
+  },
+  "learning-verifier-verdict-may-be-off-forge-confirm-before-routeback": {
+   "feedback_bug_gate_interpretation": null
+  },
+  "learning-verify-absent-claims-need-fresh-fetch-all-refs": {
+   "feedback_qa_verification_approach": null
+  },
+  "learning-verify-instruction-premises-against-code-not-just-comprehension": {
+   "feedback_qa_verification_approach": null
+  },
+  "learning-verify-squash-diff-additions-only-behind-branch": {
+   "feedback_verify_fresh_fetch_all_refs": null
+  },
+  "learning-wire-format-specs-triplicated-across-trds": {
+   "feedback_doc_first_for_arch": null
+  },
+  "pattern-chain-ship-per-item-auth": {
+   "feedback_pm_docs_only": null
+  },
+  "pattern-dm-completes-stuck-in-progress-after-qa-pass": {
+   "forge-read-pattern": null,
+   "feedback_bug_gate_interpretation": null
+  },
+  "pattern-event-mode-release-bump-via-worktree": {
+   "feedback_bump_requires_pm_signal": null
+  },
+  "pattern-no-fiction-window-main-landing-delivery": {
+   "feedback_bump_requires_pm_signal": null
+  },
+  "pattern-operator-comms-no-internal-mechanics": {
+   "#13162": null
+  },
+  "pattern-ship-gate-preserve-expanded-scope": {
+   "feedback_bump_requires_pm_signal": null
+  },
+  "pattern-verify-unmocked-paths-stubbed-by-units": {
+   "feedback_qa_verification_approach": null
+  }
+ },
+ "redirects": {
+  "style-operator-comms-no-internal-mechanics": "pattern-operator-comms-no-internal-mechanics"
+ }
+}
