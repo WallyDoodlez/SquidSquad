@@ -22,7 +22,7 @@
     {
       "id": "CQ3",
       "q": "In PM's cycle sequence as laid out in the file, does the improvement-scan step happen before or after the vault-optimize step?",
-      "expected": "Before -- improvement-scan is sequenced immediately ahead of vault-optimize, and vault-optimize's own gating text ('no improvement scan ran this cycle') presupposes it already ran.",
+      "expected": "Before -- improvement-scan is sequenced immediately ahead of vault-optimize, and the PM step order in instructions.md lists step:cycle/improvement-scan immediately ahead of step:cycle/vault-optimize.",
       "must_not": "Answering that improvement-scan runs after vault-optimize."
     }
   ],
