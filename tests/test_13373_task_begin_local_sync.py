@@ -277,8 +277,10 @@ def _git_clone(cwd, *args, attempts=2, delay=0.5):
     stderr (Windows file lock / AV scan). The destination is the last arg; a
     failed attempt's partial destination is removed before retrying, since
     git refuses to clone into a non-empty directory. The final failure still
-    raises with _git's full diagnostic."""
-    dest = Path(args[-1])
+    raises with _git's full diagnostic. The destination must not pre-exist,
+    so the cleanup can only ever remove what a failed attempt created."""
+    dest = Path(cwd) / args[-1]
+    assert not dest.exists(), f"_git_clone destination already exists: {dest}"
     for attempt in range(1, attempts + 1):
         r = _git(cwd, "clone", *args, check=attempt == attempts)
         if r.returncode == 0:
@@ -462,3 +464,12 @@ class TestRealGitHelpers14136:
         with pytest.raises(AssertionError) as exc:
             _git_clone(tmp_path, "-q", str(missing), str(tmp_path / "d"), delay=0)
         assert "rc=" in str(exc.value)
+
+    def test_clone_refuses_preexisting_destination(self, tmp_path):
+        """A pre-existing dest is never rmtree'd by the retry cleanup."""
+        dest = tmp_path / "d"
+        dest.mkdir()
+        (dest / "keep").write_text("x")
+        with pytest.raises(AssertionError, match="already exists"):
+            _git_clone(tmp_path, "-q", str(tmp_path / "seed"), str(dest), delay=0)
+        assert (dest / "keep").exists()
