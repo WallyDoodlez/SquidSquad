@@ -45,4 +45,4 @@ pm, skill or qa must re-review those two specs. No migration is needed.
 
 ## Applicable rules
 
-- None relevant (searched: comprehension, staleness, compose, static-gate, test)
+- None matched (searched: comprehension, staleness, compose, static-gate, test)
