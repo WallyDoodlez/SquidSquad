@@ -4,9 +4,12 @@ Provides create/teardown helpers for GitHub Issues, git branches, and temp files
 All test artifacts are prefixed for easy identification and guaranteed cleanup.
 """
 
+import atexit
 import json
 import os
+import shlex
 import subprocess
+import sys
 import tempfile
 import time
 from contextlib import contextmanager
@@ -19,12 +22,38 @@ TEST_LABEL = "squidsquad-test"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# Body markers every harness-created issue starts with -- the unlabeled-leak
+# sweep in cleanup_test_issues() matches on these plus ISSUE_PREFIX (#14096).
+BODY_MARKER = "Auto-created by"
 
-def _run(cmd_list: list, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a command from repo root using list form (safe for variable args)."""
+# Issue numbers this process created (#14096). Cleanup covers these even when
+# the TEST_LABEL never landed, and an atexit hook sweeps them on abort paths
+# (unittest skips tearDownClass when setUpClass raises).
+_CREATED_ISSUES: set[int] = set()
+
+sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
+try:
+    from gh_identity import gh_env
+except ImportError:  # fail-open: ambient gh identity, as before
+    def gh_env(cmd_list):
+        return None
+
+
+def _run(cmd_list, check: bool = True) -> subprocess.CompletedProcess:
+    """Run a command from repo root.
+
+    Takes a list (safe for variable args) or a string, which is split with
+    shlex so it works off Windows too. gh calls are pinned to the repo's push
+    identity (#14096): under a read-only ambient account GitHub silently drops
+    issue labels, so TEST_LABEL never landed and label-based cleanup missed
+    every issue (20 leaked on 2026-07-20).
+    """
+    if isinstance(cmd_list, str):
+        cmd_list = shlex.split(cmd_list)
     return subprocess.run(
-        cmd_list, capture_output=True, text=True,
-        check=check, cwd=str(REPO_ROOT),
+        cmd_list, capture_output=True, text=True, encoding="utf-8",
+        errors="replace", check=check, cwd=str(REPO_ROOT),
+        env=gh_env(cmd_list),
     )
 
 
@@ -44,7 +73,20 @@ def create_test_issue(title: str, labels: str = "", body: str = "Auto-created by
     ])
     # gh issue create returns a URL like https://github.com/owner/repo/issues/72
     url = result.stdout.strip()
-    return int(url.rstrip("/").split("/")[-1])
+    number = int(url.rstrip("/").split("/")[-1])
+    _CREATED_ISSUES.add(number)
+    # Labels are dropped silently (no error) when the gh identity lacks
+    # triage access. Fail loudly instead of leaving an issue no label-based
+    # cleanup can find -- and remove it first, because a raise here in
+    # setUpClass means tearDownClass never runs.
+    if TEST_LABEL not in get_issue_labels(number):
+        delete_test_issue(number)
+        raise RuntimeError(
+            f"#{number} was created without the {TEST_LABEL!r} label -- the gh "
+            f"identity lacks triage access to this repo (labels are dropped "
+            f"silently). Removed it; fix the gh identity and re-run (#14096)."
+        )
+    return number
 
 
 def close_test_issue(number: int) -> None:
@@ -57,6 +99,7 @@ def delete_test_issue(number: int) -> None:
     result = _run(["gh", "issue", "delete", str(number), "--yes"], check=False)
     if result.returncode != 0:
         close_test_issue(number)
+    _CREATED_ISSUES.discard(number)
 
 
 def edit_test_issue(number: int, remove_label: str = "", add_label: str = "") -> None:
@@ -87,19 +130,62 @@ def get_issue_state(number: int) -> str:
     return data["state"]
 
 
+def _list_json(cmd_list: list) -> list:
+    result = _run(cmd_list, check=False)
+    if result.returncode != 0 or not (result.stdout or "").strip():
+        return []
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+
+def _unlabeled_leaks() -> set[int]:
+    """Open harness issues that never got TEST_LABEL (#14096).
+
+    Matches strictly on the harness's own markers: title starts with
+    ISSUE_PREFIX AND body starts with BODY_MARKER. A search hit alone is not
+    enough -- GitHub search tokenizes, so real issues can match the query.
+    """
+    rows = _list_json(
+        ["gh", "issue", "list", "--state", "open", "--limit", "100",
+         "--search", f'"{ISSUE_PREFIX.strip()}" in:title "{BODY_MARKER}" in:body',
+         "--json", "number,title,body"])
+    return {
+        r["number"] for r in rows
+        if r.get("title", "").startswith(ISSUE_PREFIX)
+        and (r.get("body") or "").startswith(BODY_MARKER)
+    }
+
+
 def cleanup_test_issues() -> int:
-    """Find and close/delete all [TEST] prefixed issues. Returns count cleaned."""
-    result = _run(
-        ["gh", "issue", "list", "--label", TEST_LABEL, "--state", "all",
-         "--json", "number", "--limit", "100"],
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return 0
-    issues = json.loads(result.stdout)
-    for issue in issues:
-        delete_test_issue(issue["number"])
-    return len(issues)
+    """Delete (or close) every harness-created issue. Returns count cleaned.
+
+    Covers three sets (#14096): issues carrying TEST_LABEL, issues this
+    process created (registry -- survives a dropped label), and open issues
+    matching the harness's title/body markers (sweeps leaks from earlier runs).
+    """
+    labeled = {
+        i["number"] for i in _list_json(
+            ["gh", "issue", "list", "--label", TEST_LABEL, "--state", "all",
+             "--json", "number", "--limit", "100"])
+    }
+    targets = labeled | set(_CREATED_ISSUES) | _unlabeled_leaks()
+    for number in sorted(targets):
+        delete_test_issue(number)
+    return len(targets)
+
+
+def _cleanup_registry_at_exit() -> None:
+    """Last-resort sweep of this process's issues (abort paths, #14096)."""
+    for number in sorted(_CREATED_ISSUES):
+        try:
+            delete_test_issue(number)
+        except Exception:
+            pass
+
+
+atexit.register(_cleanup_registry_at_exit)
 
 
 # --- Git Branches ---
@@ -177,9 +263,11 @@ def verify_clean() -> list[str]:
     )
     if result.returncode == 0 and result.stdout.strip():
         issues = json.loads(result.stdout)
-        open_issues = [i for i in issues if True]  # all states
-        if open_issues:
-            problems.append(f"{len(open_issues)} test issues still exist")
+        if issues:
+            problems.append(f"{len(issues)} test issues still exist")
+    leaks = _unlabeled_leaks()
+    if leaks:
+        problems.append(f"{len(leaks)} unlabeled test issues still open: {sorted(leaks)}")
 
     # Check branches
     result = _run(["git", "branch", "--list", "test/*"], check=False)
