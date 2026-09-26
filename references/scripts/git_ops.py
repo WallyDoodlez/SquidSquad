@@ -1665,11 +1665,12 @@ def _pr_file_blob(pr_number, path, ref_field="headRefOid"):
     the GitHub contents API -> ``(state, text)``: ``("ok", text)``,
     ``("absent", None)`` on a 404 (not in that tree), ``("error", None)`` when
     undeterminable. Callers treat ``error`` fail-safe (no exemption)."""
+    from urllib.parse import quote  # noqa: PLC0415
     ref = _run_list(["gh", "pr", "view", str(pr_number), "--json", ref_field,
                      "-q", f".{ref_field}"], check=False)
     if ref.returncode != 0 or not ref.stdout.strip():
         return "error", None
-    res = _run_list(["gh", "api", f"repos/{{owner}}/{{repo}}/contents/{path}?ref={ref.stdout.strip()}",
+    res = _run_list(["gh", "api", f"repos/{{owner}}/{{repo}}/contents/{quote(path, safe='/')}?ref={quote(ref.stdout.strip(), safe='/')}",
                      "-q", ".content"], check=False)
     if res.returncode != 0:
         err = f"{res.stderr or ''} {res.stdout or ''}"
@@ -1739,8 +1740,14 @@ def _is_additive_capture(base_text, head_text):
     from collections import Counter  # noqa: PLC0415
 
     def lines(text):
-        return Counter(ln.rstrip() for ln in text.splitlines()
-                       if not ln.startswith("updated:"))
+        # Only the leading frontmatter block's ``updated:`` is mutable; a body
+        # line that happens to start with "updated:" is content like any other.
+        raw = text.splitlines()
+        fm_end = -1
+        if raw and raw[0].rstrip() == "---":
+            fm_end = next((i for i in range(1, len(raw)) if raw[i].rstrip() == "---"), -1)
+        return Counter(ln.rstrip() for i, ln in enumerate(raw)
+                       if not (0 < i < fm_end and ln.startswith("updated:")))
 
     return not (lines(base_text) - lines(head_text))
 

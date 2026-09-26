@@ -389,6 +389,10 @@ class TestLineageGuardExemption:
         ("status: active\na\n", "status: superseded\na #13860\n", False),    # rewrite of a base line
         ("a\na\n", "a #13860\n", False),                                     # multiset: one copy removed
         ("a\n", None, False),                                                # deleted in head
+        ("a\r\nb\r\n", "a\nb\nc #13860\n", True),                            # CRLF vs LF
+        # a BODY line starting "updated:" is content, not the mutable frontmatter key
+        ("---\ntype: learning\n---\nupdated: root cause X\n", "---\ntype: learning\n---\nupdated: nothing\n#13860\n", False),
+        ("updated: 2026-01-01\na\n", "updated: 2026-09-26\na #13860\n", False),  # no frontmatter block
     ])
     def test_additive_capture(self, base, head, ok):
         assert git_ops._is_additive_capture(base, head) is ok
@@ -454,6 +458,19 @@ class TestLineageGuardExemption:
 
         with patch.object(git_ops, "_run_list", side_effect=fake_run_list):
             assert git_ops._pr_file_blob(1, ".squidsquad/vault/galaxy/x.md", "baseRefName") == (state, None)
+
+    def test_pr_file_blob_percent_encodes_path(self):
+        calls = []
+
+        def fake_run_list(cmd, check=True):
+            calls.append(cmd)
+            if cmd[:3] == ["gh", "pr", "view"]:
+                return MagicMock(returncode=0, stdout="main\n", stderr="")
+            return MagicMock(returncode=0, stdout="I3Rlc3Q=\n", stderr="")  # "#test"
+
+        with patch.object(git_ops, "_run_list", side_effect=fake_run_list):
+            assert git_ops._pr_file_blob(1, ".squidsquad/vault/galaxy/a b#c.md", "baseRefName") == ("ok", "#test")
+        assert "contents/.squidsquad/vault/galaxy/a%20b%23c.md?ref=main" in calls[1][2]
 
 
 class TestIntakeInjection:
