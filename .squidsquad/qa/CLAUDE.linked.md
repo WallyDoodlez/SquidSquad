@@ -392,7 +392,14 @@ The "idle-wait" you see in both diagrams above is implemented by Claude's built-
 
 The canonical `Monitor` invocation (`command:` line, max `timeout_ms`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
 
-One rule from those fragments matters at this level. A Monitor watch always has a deadline (at most 30 minutes); when the tool posts its **expiry notice** (`Monitor expired after …`), that is routine — **re-arm** the same invocation and carry on. **Any other Monitor exit — `event_poll.py` terminates on its own (regardless of exit code), tool error, stream close — means end your session immediately**. Do not retry `Monitor` in that case, do not wait for the harness to recover, do not pivot to forge-direct work or to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed. The expiry notice is the only thing that means re-arm — every exit without it ends the session.
+One rule from those fragments matters at this level. A Monitor watch always has a deadline (at most 30 minutes); when the tool posts its **expiry notice** (`Monitor expired after …`), that is routine — **re-arm** the same invocation and carry on. **Any other Monitor exit — `event_poll.py` terminates on its own (regardless of exit code), tool error, stream close — means end your session immediately**. Do not retry `Monitor` in that case, do not wait for the harness to recover, do not pivot to forge-direct work or to polling mid-session. You cannot terminate your own process, and ending your turn alone leaves you alive but deaf. So ending the session is three steps (#14114):
+1. If you are mid-task, checkpoint `working-state.md`.
+2. Run `python references/scripts/cycle.py end-session`, which has the harness replace this session.
+3. Whatever it printed (including "Harness unreachable"), end your turn. Your turn may simply stop partway through step 2, when the harness kills this process; that is expected.
+
+It is never for a teammate, a healthy session, context pressure, a deploy-signal or an operator stop.
+
+The expiry notice is the only thing that means re-arm — every exit without it ends the session.
 
 #### 6. How `→ run sub-skill` markers work
 
