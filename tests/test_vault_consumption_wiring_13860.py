@@ -117,3 +117,23 @@ class TestPmIntake:
 
     def test_worker_reads_injected_section(self):
         assert "issue body's `## Vault context` section" in read("roles/worker/implement-tasks.md")
+
+
+@pytest.mark.parametrize("rel", ["roles/verifier/verification-issue-flow.md",
+                                 "roles/verifier/verification.md"])
+class TestVerifierGate:
+    def test_runs_receipt_gate_against_pr_diff(self, rel):
+        assert "vault_consume.py check-receipts [NUMBER] --diff-base origin/main" in read(rel)
+
+    def test_rule_compliance_and_degradation(self, rel):
+        text = read(rel)
+        assert "## Applicable rules" in text and "rule compliance" in text
+        assert "pass-with-note" in text
+
+    def test_gate_precedes_verdict(self, rel):
+        text = read(rel)
+        verdict = "6. If verified" if "issue-flow" in rel else "2d. **AC walk"
+        assert text.index("check-receipts") < text.index(verdict)
+
+    def test_no_raw_vault_grep(self, rel):
+        assert not RAW_VAULT_GREP.search(read(rel))

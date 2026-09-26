@@ -78,6 +78,15 @@ python references/scripts/git_ops.py task-end [role] [number]
 
 2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
 
+2c-bis. **Vault receipt gate** (#13860, VAULT-ARCH §9.4) — on the checked-out branch:
+   ```bash
+   python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main
+   ```
+   - Exit 1 (`verdict: fail`) → reject back to dev with the `problems` it lists (missing/malformed `## Vault context consumed` or `## Applicable rules`, or the lineage file absent from the PR diff). This is a zero-gap finding like any other.
+   - `verdict: pass-with-note` (engine was unavailable at pickup) → not a reject; quote the note in your verdict comment.
+   - Then **rule compliance**: Read every note cited under `## Applicable rules` in the lineage file (`lineage.path` in the output) and check the diff against each rule. A violated rule is a reject naming the rule's `[[slug]]` and the offending change.
+   For your own verification context, search through the engine, never grep: `python references/scripts/vault_consume.py search --alias [VERIFIER_ALIAS] --task [NUMBER] --tags <keywords>`.
+
 2d. **AC walk against the issue body's Acceptance Criteria** (#8950 Gate #3, updated by #9184) — before marking any task `pending-test → pending-ship`, walk each AC in the **GitHub issue body**. For each AC:
 
    - Confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.**
