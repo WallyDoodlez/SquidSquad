@@ -22,11 +22,6 @@ For each issue:
 
 0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
-1b. **Consult the vault** (#5572) — search for relevant context before verifying:
-   ```bash
-   grep -rl "[keyword from issue]" .squidsquad/vault/ --include="*.md" | head -5
-   ```
-   Check for: decisions that affect expected behavior, patterns the fix should follow, learnings from similar past issues, and human quality preferences (`[[human-profile]]`). This prevents false passes on code that violates vault-documented constraints.
 2. **Branch checkout** (#3296): Check out the task's feature branch before verification:
    ```bash
    python references/scripts/git_ops.py task-begin [role] [number]
@@ -36,11 +31,19 @@ For each issue:
    ```bash
    python references/scripts/git_ops.py task-end [role] [number]
    ```
+2b. **Vault receipt gate** (#13860, VAULT-ARCH §9.4) — on the checked-out branch:
+   ```bash
+   python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main
+   ```
+   - Exit 1 (`verdict: fail`) → reject back to dev with the `problems` it lists (missing/malformed `## Vault context consumed` or `## Applicable rules`, or the lineage file absent from the PR diff). This is a zero-gap finding like any other.
+   - `verdict: pass-with-note` (engine was unavailable at pickup) → not a reject; quote the note in your verdict comment.
+   - Then **rule compliance**: Read every note cited under `## Applicable rules` in the lineage file (`lineage.path` in the output) and check the diff against each rule. A violated rule is a reject naming the rule's `[[slug]]` and the offending change.
+   For your own verification context, search through the engine, never grep: `python references/scripts/vault_consume.py search --alias [VERIFIER_ALIAS] --task [NUMBER] --tags <keywords>`.
 3. Run the relevant test or manually verify the fix.
 4. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
 5. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
    This flow intentionally never authors a `TEST-PLAN-<N>.md` — issue-flow has no AC-derived TC list to enumerate, so `tracker.py`'s TC-coverage ship gate (task-flow's `TEST-PLAN`/`QA-RESULTS` pairing) structurally never activates for `type:issue` items. Steps 4 and 5 above are this flow's own equivalent guarantee — a required regression test plus a green full suite — enforced directly by the verifier rather than by that script (#13838).
-6. If verified (fix works, regression test exists, all tests pass):
+6. If verified (fix works, regression test exists, all tests pass, vault receipt gate passes):
    - If a PR exists for this issue, convert from draft to ready:
      ```bash
      gh pr list --search "squidsquad/" --state open --json number,headRefName | python -c "import sys,json; [print(p['number']) for p in json.load(sys.stdin) if '/[NUMBER]' in p['headRefName']]"
@@ -53,6 +56,6 @@ For each issue:
      python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified. Status → Pending Ship."
      ```
    - Do NOT touch any release counter. Release state (the `Shipped Since Last Bump` counter, version bumps, tags) belongs entirely to the DM under its L4 policy — the verifier verifies and signals `pending-ship`, nothing more (see `docs/DM-ARCH.md` §2: "Release state belongs to the DM, not the verifier").
-7. If not verified (fix doesn't work, no regression test, or tests fail):
+7. If not verified (fix doesn't work, no regression test, tests fail, or the vault receipt gate fails):
    - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead`
    - Comment with specific failures — be specific about missing tests.

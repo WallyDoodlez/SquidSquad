@@ -5,7 +5,7 @@ ordinal: 10
 
 ## Vault — Shared Memory Layer
 
-All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
+All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`: decisions, patterns, learnings, binding rules, subsystem hubs, and human preferences that outlive any single cycle. The note types and their folders are defined by the type registry `.squidsquad/vault/vault-schema.json` — it is authoritative; nothing below overrides it.
 
 **Per-role write lanes**. Every role contributes patterns from its own lane:
 - **PM**: coordination / decision patterns; team-process learnings; vault-synthesis on quiet cycles (cross-agent posture notes).
@@ -13,104 +13,90 @@ All agents have read/write access to the shared knowledge vault at `.squidsquad/
 - **Verifier**: testing-and-verification patterns (TEST-PLAN approaches that catch a recurring root-cause class, comprehension-test fixtures that surface a class of LLM drift, verification techniques that generalize). **Do NOT** use vault writes to revisit, second-guess, or rebut decisions PM or worker agents have already made — their decisions are theirs to own. The verifier's vault contribution is the *testing craft*, not the design call.
 - **DM**: delivery patterns; release-process learnings; CHANGELOG framing that generalized; version-bump heuristics.
 
-The universal write budget (max 2 writes per cycle) and 4-gate logic (write budget → dedup → reusability → fresh-context test) apply to every role. See [[vault-remember]] for the per-cycle reflection routine that drives write candidates.
-
+The universal write budget (max 2 writes per cycle) and the 4-gate logic apply to every role — see [[vault-remember]].
 
 ```
 .squidsquad/vault/
-├── projects/       # Active project context, goals, constraints
-├── areas/          # Ongoing concerns: human preferences, code conventions,
-│                   # design system, company values, team culture
-├── resources/      # Reference material, external docs, research
-├── archives/       # Shipped features, closed decisions, historical context
-└── galaxy/         # Atomic knowledge notes (Zettelkasten):
-                    # decisions, patterns, learnings, styles
+├── BRIEFING.md         # hot summary — read directly, outside the engine
+├── vault-schema.json   # the type registry
+├── projects/  areas/  resources/   # hubs + reference material
+├── systems/            # one hub note per subsystem; galaxy notes link INTO these
+├── archives/           # legacy location only — retire notes by status, not by moving them
+└── galaxy/             # atomic notes: decision-*, pattern-*, learning-*, rule-*
 ```
 
-### Vault Initialization (vault-init)
+### Reading the vault — engine only
 
-If `.squidsquad/vault/` does not exist, initialize it: create the 5 PARAG directories, add `.gitkeep` to empty dirs, create `BRIEFING.md` from `references/vault-templates/BRIEFING.md`, create `areas/human-profile.md` and `projects/{project-name}.md` from templates, create `.squidsquad/vault/.obsidian/` (add to `.gitignore`). vault-init is **idempotent**.
+Every vault search goes through the engine. **Never grep, glob, or Read-scan the vault folders to search**: a grep that finds the right note leaves no telemetry trail, so the note reads as unused and gets proposed for pruning.
 
-### Entity Model
+```bash
+python references/scripts/vault_consume.py search --alias [ROLE] [--task N] --tags <keywords> --terms "<subject>" [--types rule]
+```
 
-Folder mapping: `areas/` = ongoing concerns (human-profile, code-conventions, design-system, company-context), `projects/` = active project context, `galaxy/` = atomic knowledge notes (decision-\*, pattern-\*, learning-\*, style-\*), `resources/` = reference material, `archives/` = historical context. See `references/docs/vault-reference.md` for full entity table.
+- Output is ranked metadata, never note bodies: each result carries `slug`, `path`, `title`, `type`, `status`, `tags`, `tier` and usage counts, among other fields. Read the note bodies you need; reading a note the engine surfaced is the intended follow-up.
+- Pass `--task N` whenever you are working an issue — telemetry attributes to it. Pass `--no-write` only for diagnostics.
+- Exit code 3 = engine unavailable. Say so honestly wherever a result was expected; never substitute a grep, never claim "none relevant".
+- `BRIEFING.md` and `areas/human-profile.md` are read directly (no search needed).
 
-### Creating Notes (vault-create)
+### Consumption steps and receipts
 
-1. Pick the correct folder (see Entity Model). Name using kebab-case; galaxy notes use type prefix: `decision-`, `pattern-`, `learning-`, `style-`.
-2. Copy the TYPE's template (`references/vault-templates/<type>.md`; registered types per `vault-schema.json`, `_generic.md` for custom types without one) and fill in:
-   - **YAML frontmatter**: type, tags, created, updated, owner, status (`active`), confidence, source, links
-   - **`links`**: bare note names as YAML list (no wikilink syntax in frontmatter)
-   - **`source`**: `conversation`, `code`, `review`, `observation`, or `research`
-   - **Body + Changelog**: fill per template
-3. Use **bare wikilinks** `[[note-name]]` in body only — no aliases
-4. **Creation threshold**: Only create if reusable across contexts. Transient observations belong in iteration logs.
+These steps are mandatory and their output is committed:
 
-### Confidence Levels
+| When | Who | Step |
+|---|---|---|
+| Task filing | PM | `vault_consume.py inject-context <n> --alias [ROLE] --tags <keywords> --terms "<subject>"` appends `## Vault context` to the issue body (task-intake Phase 3) |
+| Pickup | worker | Context consultation + rules matching; receipts `## Vault context consumed` and `## Applicable rules` go in the issue's single lineage file (`vault_consume.py lineage-path <n>`) — procedure in implement-tasks step 2c |
+| Verification | verifier | `vault_consume.py check-receipts <n> --diff-base origin/main` + rule compliance |
 
-- **high**: Human explicitly stated or confirmed this
-- **medium**: Agent observed this directly (e.g., from code review, conversation patterns)
-- **low**: Agent inferred this (e.g., from indirect signals, extrapolation)
+Receipt lines, per section (the gate checks them section by section):
+- `## Vault context consumed`: `- [[slug]] -- one-line relevance` lines, or the single line `- None relevant (searched: …)`.
+- `## Applicable rules`: `- [[rule-slug]] -- how it applies` lines, or the single line `- None matched (searched rules lane: …)`.
+- Either section: the single line `- Engine unavailable: <reason>` when the search could not run.
 
-### Wikilinks
+**Citation duty**: whenever a note shapes a committed artifact (a receipt, a research doc, a plan), record it — the engine cannot:
 
-Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find inbound links: `grep -rl '\[\[note-name\]\]' .squidsquad/vault/`. Find outbound: `grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/note.md`.
+```bash
+python references/scripts/vault_consume.py cite --alias [ROLE] --task N --slugs a,b
+```
+
+### Creating notes (vault-create)
+
+1. Pick the type from the registry. Galaxy types carry a filename prefix (`decision-`, `pattern-`, `learning-`, `rule-`); `system` hubs live in `systems/`.
+2. Materialize from the type's template — never hand-roll frontmatter:
+   ```bash
+   python references/scripts/vault_entity.py create <type> <slug>
+   ```
+   It uses `references/vault-templates/<type>.md`; a custom registered type with no template of its own falls back to `_generic.md`.
+3. Fill the frontmatter: `type`, `tags` (at least one domain tag — the word a teammate would search for; `tags: []` is invalid), `created`, `updated`, `status: active`, `owner` (`pm` | `worker` | `verifier` | `dm` | `shared`). Do not add `confidence`, `source`, `links`, or any usage counter — usage is telemetry, never frontmatter.
+4. Body: bare wikilinks `[[note-name]]`, no aliases. Every galaxy note links to the `systems/` hub it is about.
+5. **Rule notes** (`rule-*`) are the binding lane that pickup matches and the verifier enforces: one imperative sentence under `## Rule`, where it applies under `## Scope`, and `## Why` linking the parent decision. Write one only when a human or PM established the rule — never promote your own opinion to a rule.
+6. Creation threshold: only if reusable across contexts. Transient observations belong in iteration logs.
+
+### Updating notes (vault-update)
+
+1. Read the full note first.
+2. Surgical edit — change only the targeted section.
+3. Never delete content; correct it, or retire the note with `status: superseded` (link its replacement) or `status: archived`. Do not move files to `archives/`.
+4. Set `updated` to today.
+5. If the note has a `## Changelog`, append `- YYYY-MM-DD — [ROLE]: what changed and why`.
+
+### Checks after every write
+
+```bash
+python references/scripts/vault_check.py check-frontmatter
+python references/scripts/vault_check.py check-wikilinks
+python references/scripts/vault_check.py check-structure
+```
+
+Fix every flag that names the note you wrote before committing. Flags on other notes are pre-existing legacy debt owned by the vault migration (#13862) — leave them. Advisory: `vault_check.py check-size` (galaxy notes over 500 lines — split them) and `vault_check.py check-hub-links` (notes linked to no hub).
 
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
+`.squidsquad/vault/BRIEFING.md` is a ~50-line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Read it at boot and re-read when more than a cycle old. Its staleness is checked every cycle (including quiet cycles) — see [[vault-remember]].
 
-### Concurrent Access
+### Concurrent access and git
 
-One note per topic — don't append to other agents' notes. Changelogs are append-only. On merge conflict: keep both versions, never discard vault content.
-
-### Note Size Guidance
-
-Galaxy notes: atomic, max ~500 lines (split if larger). Area notes: grow freely. Project notes: keep focused, archive old sections. Resource notes: prefer linking to external sources.
-
-### Updating Notes (vault-update)
-
-1. **Read the full note first** — never update unread notes.
-2. **Surgical edit** — modify only targeted section(s), preserve everything else.
-3. **Never delete existing content** — add corrections; mark superseded via `status` frontmatter.
-4. **Update `updated`** frontmatter to today's date.
-5. **Append Changelog**: `- YYYY-MM-DD — Updated by [agent]. [What changed and why].`
-6. **Run vault-check Level 1** after updating.
-
-### Searching the Vault (vault-search)
-
-Four search modes: **By tag** (`grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"`), **By type** (`grep -rl "^type: <TYPE>" ...`), **By keyword** (`grep -rl "<KEYWORD>" ...`), **By wikilink traversal** (1-hop outbound+inbound, max 2-hop). Max 10 results, sorted by most recently updated. Cache results within a cycle. See `references/docs/vault-reference.md` for full search examples.
-
-### Checking Vault Health (vault-check)
-
-vault-check validates vault notes for correctness and consistency. Two levels:
-
-#### Level 1 — Single Note + 2-Hop Neighborhood
-
-Runs **automatically after every vault-create or vault-update**. Checks the written note and all notes within 2 wikilink hops.
-
-For each note checked:
-
-1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`, `source`. Warn if any are missing or empty.
-2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
-3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
-4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.
-5. **Galaxy note size**: If the note is in `galaxy/` and exceeds 500 lines, warn and suggest splitting. Do NOT warn for notes in `areas/`, `projects/`, or `resources/`.
-
-Print warnings with `[vault-check]` prefix. If no issues found, print nothing (silent pass).
-
-#### Level 2 — Full Vault Sweep
-
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all Level 1 checks + orphan detection + staleness detection (30+ days) + broken link census + health summary. See `references/docs/vault-reference.md` for details and scripts.
-
-### Rules
-
-- All vault notes are **git-tracked** — full version history
-- Galaxy notes should be **atomic** (one idea per note, max ~500 lines)
-- Area notes can grow freely (human-profile, design-system, etc.)
-- Every note must have the **confidence** field
-- Always append to the **Changelog** section when modifying a note
-- The vault is browsable in the **Obsidian app** — maintain clean structure
-- Empty directories use `.gitkeep` to persist in git
-- **vault-check Level 1 runs after every write** — vault-create and vault-update both trigger it
-- **vault-update never deletes content** — only adds, corrects, or marks as superseded
+- One note per topic; prefer updating an existing note over creating a near-duplicate ([[vault-remember]] gate 2).
+- Vault notes are committed on main with normal cycle commits. The one exception is capture-at-ship: a note written on a task branch rides that PR.
+- Telemetry shards under `.telemetry/` are written only by the engine and ride main commits only — never hand-edit them, never commit them on a task branch.
+- On a merge conflict in a note: keep both versions, never discard vault content; PM reconciles.

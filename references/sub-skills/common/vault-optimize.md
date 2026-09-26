@@ -5,30 +5,27 @@ ordinal: 10
 
 ### Step — Vault Optimize (Quiet Cycle)
 
-During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
+During quiet cycles, run vault maintenance. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
 
-**Activation**: Vault-optimize is **always-on** — there is no enable/disable toggle. Only run when the vault has 20+ notes AND this is a quiet cycle with no other work (these gates are the activation control, #13043).
+**Activation**: always-on, no toggle. Run only when the vault has 20+ notes AND this is a quiet cycle with no other work (#13043).
 
-Run the optimizer:
+Maintenance is **propose-only**: pruning is decided by usage telemetry, not age, and nothing is archived, deleted, merged, or rewritten automatically. Do NOT run `vault_optimize.py run`, `prune-scan`, or `decay-apply` — they are the retired v1 time-decay path.
 
-```bash
-python references/scripts/vault_optimize.py run
-```
+1. **Pruning proposals** from the engine's impressions report:
+   ```bash
+   python references/scripts/vault_optimize.py propose-prunes
+   ```
+   - `engineUnavailable: true` → skip this step this cycle; state the `reason` in your iteration log.
+   - Otherwise each proposal carries a bucket: `stale` (was used, not recently → `archive`), `surfaced-never-used` or `cold` (→ `review`).
+   - If there are proposals, file **one** task for the human to review — never act on them yourself. → run sub-skill: `tracker-protocol` — **Feature task** shape, title `"Vault pruning review: <N> notes"`, body listing each proposal's slug, bucket, and evidence, `--role pm`, `--priority low` — it files as `pending`, which is the human approval gate. Skip filing if an open vault-pruning review task already exists.
+   - On approval, retire a note by setting `status: archived` (per vault-protocol's update rules) — never by moving or deleting the file.
 
-The script handles:
-1. **Prune**: Auto-archives galaxy notes that are both stale (60+ days since update) AND orphaned (no inbound wikilinks). Never prunes notes created today.
-2. **Confidence decay**: Downgrades confidence (high→medium after 60 days, medium→low after 120 days) for stale notes.
-3. **Reindex**: Rebuilds `links` frontmatter from body wikilinks across all notes.
-4. **Relevance scoring**: Computes scores based on link count + recency + confidence. Stored in `.squidsquad/vault/.relevance-index.json`.
+2. **Contradictions**: while reading notes for step 1, if two active notes contradict each other, file a separate task for the human (same shape, title `"Vault contradiction: <topic>"`, both `[[slugs]]` and the conflicting statements in the body, filed as `pending`). Never resolve a contradiction yourself.
 
-**Pending questions**: If optimization surfaces questions that need human input (e.g., "Should these two similar notes be merged?"), add them to the queue:
+3. **Telemetry compaction** of your own shard:
+   ```bash
+   python references/scripts/vault_optimize.py compact-telemetry --alias [ROLE]
+   ```
+   A `skipped` result (engine unavailable, or instance id unprovisioned) is fine — note the reason and move on.
 
-```bash
-python references/scripts/vault_optimize.py add-question --agent [ROLE] --note [path] --question "[plain language question]"
-```
-
-Questions use plain language — never expose vault internals (galaxy, frontmatter, wikilinks, PARAG). Describe notes by topic. All questions are skippable.
-
-**Status bar**: The pending question count is shown in the status bar. PM mentions it in check-in. Human responds when ready.
-
-If the vault is too small (<20 notes), the script exits cleanly with no output.
+If the vault has fewer than 20 notes, skip the whole step silently.

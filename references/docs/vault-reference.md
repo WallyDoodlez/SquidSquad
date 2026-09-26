@@ -1,70 +1,62 @@
 # Vault Reference — Detailed Operations
 
+The operational contract lives in the `vault-protocol` sub-skill; the design is
+`docs/VAULT-ARCH.md` (v2). This page is the quick reference for both.
+
 ## Entity Model
 
-| Entity | Location | Purpose |
-|--------|----------|---------|
-| Human profile | `areas/human-profile.md` | Preferences, values, communication style |
-| Company context | `areas/company-context.md` | Culture, standards, brand guidelines |
-| Design system | `areas/design-system.md` | Colors, tokens, typography, component patterns |
-| Code conventions | `areas/code-conventions.md` | Style, patterns, architecture decisions |
-| Project context | `projects/{name}.md` | Goals, constraints, architecture, tech stack |
-| Decisions | `galaxy/decision-*.md` | Individual architectural/design/process decisions |
-| Patterns | `galaxy/pattern-*.md` | Recurring approaches, established conventions |
-| Learnings | `galaxy/learning-*.md` | Lessons learned, what worked/didn't |
-| Styles | `galaxy/style-*.md` | Visual style, writing tone, code style preferences |
+Types and folders come from the type registry `.squidsquad/vault/vault-schema.json`
+(framework default: `references/vault-schema-default.json`). The default profile:
 
-## Searching the Vault (vault-search)
+| Type | Location | Purpose |
+|------|----------|---------|
+| `area` | `areas/*.md` | Ongoing concerns — human profile, conventions, design system (hub) |
+| `project` | `projects/*.md` | Active project context, goals, constraints (hub) |
+| `resource` | `resources/*.md` | Reference material, external docs, research |
+| `system` | `systems/*.md` | One hub per subsystem; galaxy notes link into it |
+| `decision` | `galaxy/decision-*.md` | Individual architectural/design/process decisions |
+| `pattern` | `galaxy/pattern-*.md` | Recurring approaches, validated conventions |
+| `learning` | `galaxy/learning-*.md` | Lessons learned, what worked / didn't |
+| `rule` | `galaxy/rule-*.md` | Binding rules (Rule / Scope / Why) — matched at pickup, enforced by the verifier |
 
-vault-search finds notes by tag, type, keyword, or wikilink traversal. It uses grep internally.
+Notes retire by `status: superseded | archived`, never by moving to `archives/`
+(which remains only as a legacy location).
 
-### Search modes:
+## Searching the Vault
 
-1. **By tag**: Find notes whose `tags` frontmatter contains a specific tag.
-   ```bash
-   grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"
-   ```
-
-2. **By type**: Find notes with a specific `type` frontmatter value.
-   ```bash
-   grep -rl "^type: <TYPE>" .squidsquad/vault/ --include="*.md"
-   ```
-
-3. **By keyword** (full-text): Find notes containing a phrase.
-   ```bash
-   grep -rl "<KEYWORD>" .squidsquad/vault/ --include="*.md"
-   ```
-
-4. **By wikilink traversal**: Starting from a note, find connected notes.
-   - **1-hop**: Outbound links (wikilinks in the note's body) + inbound links (other notes linking to this one).
-     ```bash
-     # Outbound: extract wikilinks from the note
-     grep -o '\[\[[^]]*\]\]' .squidsquad/vault/<path> | sed 's/\[\[//g;s/\]\]//g'
-     # Inbound: find notes linking TO this note
-     grep -rl '\[\[<note-name>\]\]' .squidsquad/vault/ --include="*.md"
-     ```
-   - **2-hop**: For each 1-hop result, repeat the outbound+inbound search. Do NOT traverse beyond 2 hops.
-
-**Result format**: Max 10 results, sorted by most recently updated.
-
-**Caching**: Within a single cycle, cache search results to avoid repeated grep calls for the same query.
-
-## Vault-Check Level 2 — Full Vault Sweep
-
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file in `.squidsquad/vault/`:
-
-1. Run all Level 1 checks on every note.
-2. **Orphan detection**: Find notes with zero inbound wikilinks that are not area notes. Area notes and BRIEFING.md are exempt.
-3. **Staleness detection**: Find notes with `status: active` and `updated` date older than 30 days.
-4. **Broken link census**: Aggregate all unresolved wikilinks across the vault.
-5. **Health summary**: Print totals — note count, orphan count, stale count, broken link count.
+Search only through the engine — raw grep is banned because it leaves no
+telemetry, so a useful note looks unused and gets proposed for pruning.
 
 ```bash
-# Quick orphan check: find notes never linked TO
-for f in .squidsquad/vault/galaxy/*.md; do
-  name=$(basename "$f" .md)
-  if ! grep -rl "\[\[$name\]\]" .squidsquad/vault/ --include="*.md" -q 2>/dev/null; then
-    echo "[vault-check] Orphan: $f"
-  fi
-done
+python references/scripts/vault_consume.py search --alias <alias> [--task N] \
+    [--entities a,b] [--tags x,y] [--terms "free text"] [--types rule] [--top N] [--no-write]
 ```
+
+- **Tiers**: filename > inbound-wikilink > tag > content. Matches then expand by
+  budgeted wikilink traversal (galaxy hops cost budget, hub hops are free).
+- **Ranking within a tier**: telemetry (`used`, `impression`, `walked`) + recency,
+  times the type's weight; superseded/archived notes rank near zero.
+- **Output**: metadata-only JSON; Read the bodies you need.
+- **`--types rule`**: the binding-rules lane.
+- **Exit 3**: engine unavailable (no `node`, or the engine is not installed) —
+  report it honestly; never substitute a grep.
+- **Recording use**: `vault_consume.py cite --alias <a> --task N --slugs a,b` writes
+  `used` events for notes a committed artifact cites.
+
+## Checks
+
+| Command | Checks |
+|---------|--------|
+| `vault_check.py check-frontmatter` | Required fields: `type`, `tags`, `created`, `updated`, `owner`, `status` |
+| `vault_check.py check-wikilinks` | Every `[[name]]` resolves to a note |
+| `vault_check.py check-structure` | Folder / prefix / type consistency against the registry |
+| `vault_check.py check-size` | Galaxy notes over 500 lines (advisory) |
+| `vault_check.py check-hub-links` | Budgeted notes linked to no hub (advisory) |
+| `vault_check.py list-orphans` | Notes nothing links to |
+
+## Maintenance
+
+Propose-only: `vault_optimize.py propose-prunes` turns the engine's impressions
+report (cold / surfaced-never-used / stale buckets) into proposals for human
+review; `vault_optimize.py compact-telemetry --alias <a>` compacts the caller's own
+telemetry shard. Nothing is archived or deleted automatically.

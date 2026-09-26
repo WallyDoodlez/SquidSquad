@@ -19,7 +19,7 @@ If the result is non-empty, pick up the first item:
 2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
 3. Fix each gap identified in the feedback.
 4. Re-run tests and smoke tests; capture output: `[ROLE_TEST_CMD] 2>&1 | tee .squidsquad/[ROLE]/test-output-[NUMBER].log`
-4b. **Pickup-comment fidelity check** (#9946) — even on the verifier-rejected fast-path. Run `git diff origin/main...HEAD --name-only` and confirm every gap-fix you plan to claim in the transition comment is substantiated by a changed file in the diff. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables. See the `Pickup-comment fidelity` fragment for full guidance.
+4b. **Pickup-comment fidelity check** (#9946) — even on the verifier-rejected fast-path. Run `git diff origin/main...HEAD --name-only` and confirm every gap-fix you plan to claim in the transition comment is substantiated by a changed file in the diff. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables (sole exception: the issue's lineage file, which you `git add` explicitly per step 2c). See the `Pickup-comment fidelity` fragment for full guidance.
 5. Transition back to Pending Test:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
@@ -53,11 +53,14 @@ If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body
 2. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]` — checks out the task's feature branch.
 3. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role [ROLE]-lead`
 4. Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."`
+4b. **Fix-plan + vault receipts** (#13860, VAULT-ARCH §9.3): `python references/scripts/vault_consume.py init-fix-plan [NUMBER] --role [ROLE]` creates the issue's lineage file. Once you have investigated, fill its Root cause / Intended direction / Impact sections (a few lines each — it is what a human reads to judge the fix direction before the diff). Then run the vault consultation + rules matching exactly as in implement-tasks step 2c (receipts go in this fix-plan; `git add` it on the task branch).
 5. Read the issue details, locate the relevant code, fix the issue.
 6. Run the test command: `[ROLE_TEST_CMD]`
+6b. **Capture-at-ship** (#13860, VAULT-ARCH §9.5): → run sub-skill: `vault-remember` — its **Capture-at-ship** section. A root cause worth remembering is written on this branch, cites `#[NUMBER]`, and ships in this PR.
 7. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
+   Then `python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main` must exit 0 (fix-plan in the PR diff with valid receipts).
 7b. **Self-verification reflection** — before marking pending-test, run the same self-review as for tasks (Step 8b in implement-tasks): regression, integration, philosophy, personas checks. Fix any concerns before proceeding.
-7b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md, and Step 8b-bis in implement-tasks. Run `git diff origin/main...HEAD --name-only` and a captured test run before drafting the transition comment; every concrete claim must be substantiated. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
+7b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md, and Step 8b-bis in implement-tasks. Run `git diff origin/main...HEAD --name-only` and a captured test run before drafting the transition comment; every concrete claim must be substantiated. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables (sole exception: the issue's lineage file, which you `git add` explicitly per step 2c).
 7c. **External code review** — run the external review loop (Step 8c in implement-tasks). Stage changes, get changed files, run model review, process findings. Same dispositions apply (fix, file-to-PM, justified-ignore).
 8. If tests pass, self-review passes, and changes exist:
    - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead`

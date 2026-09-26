@@ -78,6 +78,8 @@ python references/scripts/git_ops.py task-end [role] [number]
 
 2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
 
+2c-bis. **Vault receipt gate** (#13860): `python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main` on the branch. `fail` → reject with its `problems`; `pass-with-note` → pass, quote the note. Then read each rule under `## Applicable rules` in `lineage.path` and reject any diff that violates one (name its `[[slug]]`).
+
 2d. **AC walk against the issue body's Acceptance Criteria** (#8950 Gate #3, updated by #9184) — before marking any task `pending-test → pending-ship`, walk each AC in the **GitHub issue body**. For each AC:
 
    - Confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.**

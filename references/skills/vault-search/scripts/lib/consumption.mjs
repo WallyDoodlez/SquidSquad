@@ -37,6 +37,9 @@ import { randomUUID } from 'node:crypto';
 export const DEFAULT_CONFIG = {
   searchTopK: 12,
   traversalBudget: 2,
+  // #13860 S4.4 / §7.2 merge-target test: min Jaccard(slug+title+tags) for a
+  // dedup hit to become the merge target. Read by vault_consume.py dedup.
+  dedupThreshold: 0.5,
   tieBreakWeights: { used: 2.0, impression: 0.25, walked: 0.5, recency: 0.25 },
   types: {
     project: { folder: 'projects', traversal: 'free', weight: 0.8, hub: true },
@@ -45,6 +48,7 @@ export const DEFAULT_CONFIG = {
     decision: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'decision-' },
     pattern: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'pattern-' },
     learning: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'learning-' },
+    rule: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'rule-' },
     system: { folder: 'systems', traversal: 'free', weight: 0.8, hub: true },
     archive: { folder: 'archives', traversal: 'free', weight: 0.5, hub: false },
   },

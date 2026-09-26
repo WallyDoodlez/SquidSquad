@@ -56,13 +56,15 @@ class TestVaultSynthesisStructure:
         assert "galaxy" in synthesis_text
 
     def test_pattern_type_used(self, synthesis_text):
-        """#3139: Posture notes use existing 'pattern' vault type."""
-        # Check that the type field is set to pattern
-        assert re.search(r'\*\*Type\*\*.*pattern', synthesis_text)
+        """#3139 / #13860 (VAULT-ARCH v2 7.4): a posture is a `systems/` hub
+        section or a `pattern-*` note -- no posture-specific type/prefix."""
+        assert "vault_entity.py create pattern" in synthesis_text
+        assert "systems/" in synthesis_text
+        assert "Never create `pattern-posture-*` notes" in synthesis_text
 
     def test_posture_tag_required(self, synthesis_text):
         """#3139: Posture notes include the 'posture' tag."""
-        assert re.search(r'\*\*Tags\*\*.*posture', synthesis_text)
+        assert re.search(r'tagged `posture`', synthesis_text)
 
     def test_human_approval_task(self, synthesis_text):
         """#3139: Each posture files a pending task for human review.
@@ -81,8 +83,9 @@ class TestVaultSynthesisStructure:
         assert re.search(r'2\+.*sources|2\+.*distinct|cross-agent only', synthesis_text, re.IGNORECASE)
 
     def test_vault_check_after_creation(self, synthesis_text):
-        """#3139: vault-check Level 1 runs after posture note creation."""
-        assert "vault-check" in synthesis_text
+        """#3139 / #13860: vault-protocol's post-write checks run after the
+        posture note is written (v2 names them 'checks after every write')."""
+        assert "vault-protocol's checks after every write" in synthesis_text
 
     def test_last_synthesis_sentinel(self, synthesis_text):
         """#3139: .last-synthesis file used to track last run."""

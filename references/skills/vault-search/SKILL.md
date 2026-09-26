@@ -27,8 +27,11 @@ impressions report and gets pruned.
    node .claude/skills/vault-search/scripts/vault-query.mjs \
         --instance-id <uuid> --alias <alias> [--task N] \
         [--vault .squidsquad/vault] [--entities a,b] [--tags x,y] \
-        [--terms "free text"] [--top N] [--no-write]
+        [--terms "free text"] [--types rule] [--top N] [--no-write]
    ```
+
+   `--types` restricts results to a type lane — `--types rule` is the
+   binding-rules lane scanned by pickup rules matching (VAULT-ARCH §9.3).
 
 4. The output is metadata-only JSON (`results` + `traversed`, ranked; no note
    bodies). Read the note bodies you actually need with the Read tool, then

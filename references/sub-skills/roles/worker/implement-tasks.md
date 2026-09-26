@@ -35,11 +35,25 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no CONTEXT artifact exists (bug fix or trivial task), the issue body's AC list is the contract; proceed to step 2c.
 
    **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. Verifier writes its own test plan at `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` during verification. Worker's job is to implement against the AC list, not against a pre-written test plan.
-2c. **Consult the vault** (#5572) — before implementing, search the vault for relevant context:
-   ```bash
-   grep -rl "[keyword]" .squidsquad/vault/ --include="*.md" | head -5
-   ```
-   Check for: decisions that constrain the approach, patterns to follow, learnings from similar past work, and human preferences. Especially check `[[human-profile]]` and BRIEFING.md. This takes seconds and prevents rework from missed context.
+2c. **Vault consultation + receipts** (#13860, VAULT-ARCH §9.3) — mandatory, and its output is committed. Never grep the vault; every search goes through the engine wrapper.
+   1. **Lineage file**: `python references/scripts/vault_consume.py lineage-path [NUMBER]`. If it prints `"exists": false`, create one: `python references/scripts/vault_consume.py init-fix-plan [NUMBER] --role [ROLE]` (bug flow already did this at pickup). This one file holds the receipts.
+   2. **Context consultation**: start from the issue body's `## Vault context` section (PM-injected at filing) — Read those notes first. Then `python references/scripts/vault_consume.py search --alias [ROLE] --task [NUMBER] --tags <task keywords> --terms "<task subject>"`. Read the bodies of the hits that bear on the task. Append to the lineage file:
+      ```
+      ## Vault context consumed
+
+      - [[decision-merge-policy]] -- merge, never rebase; shapes the branch-sync step
+      ```
+      Nothing relevant → the single line `- None relevant (searched: <keywords>)`. Exit code 3 → the single line `- Engine unavailable: <reason from the JSON>` (never "none relevant" when the search did not run).
+   3. **Rules matching**: same command plus `--types rule` (stage 1 shortlist). Read each shortlisted rule; keep only rules that actually apply to this change (stage 2). Append:
+      ```
+      ## Applicable rules
+
+      - [[rule-never-rebase-shared-branches]] -- the sync in step 1b must merge origin/main
+      ```
+      None apply → `- None matched (searched rules lane: <keywords>)`. Exit code 3 → `- Engine unavailable: <reason>`.
+   4. **Cite**: `python references/scripts/vault_consume.py cite --alias [ROLE] --task [NUMBER] --slugs <every slug cited in both sections>` (skip when nothing was cited).
+   5. **Gate + commit**: `python references/scripts/vault_consume.py check-receipts [NUMBER]` must exit 0; fix what it names. Then `git add <lineage path>` and commit it on the task branch — `commit_code` does not stage `.squidsquad/` paths, so the explicit add is required.
+   Every rule listed under `## Applicable rules` binds the implementation; the verifier checks compliance. Also read BRIEFING.md and `[[human-profile]]` (outside the engine).
 3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
 4. Implement the task according to the acceptance criteria from the issue body. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
 4b. **Write unit tests for your implementation** (#9184). Worker's unit tests cover the code you actually wrote — concrete assertions on functions, scripts, modules, or behavior added or changed. They commit in the **same PR** as the implementation.
@@ -50,6 +64,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 5. Run the test command: `[ROLE_TEST_CMD]` — your new unit tests must pass alongside the existing suite.
 6. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
 7. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
+7b. **Capture-at-ship** (#13860, VAULT-ARCH §9.5): → run sub-skill: `vault-remember` — its **Capture-at-ship** section. Durable knowledge from this task (decision / root cause / pattern; chores skip) is written on this branch, cites `#[NUMBER]`, and ships in this PR.
 8. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
 8b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:
    - **Regression**: Does this change break existing behavior? Read the code paths you touched — what else depends on them?
@@ -57,7 +72,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
    - **Personas**: Will this break workflows for any agent role (PM, verifier, DM, human)? Think through each consumer of your change.
    If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for verifier to catch.
-8b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md. Run the mechanical diff check (`git diff origin/main...HEAD --name-only`) and the captured test run before drafting the transition comment. Every concrete claim in the comment must be substantiated by the diff and the test log. Edits to `.squidsquad/` and `.claude/` paths are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
+8b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md. Run the mechanical diff check (`git diff origin/main...HEAD --name-only`) and the captured test run before drafting the transition comment. Every concrete claim in the comment must be substantiated by the diff and the test log. Edits to `.squidsquad/` and `.claude/` paths are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables (sole exception: the issue's lineage file, which you `git add` explicitly per step 2c).
 8c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
 
    **Stage all changes first**:
@@ -122,6 +137,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 8d. **Sync to latest base before the final gate + transition** (#13286). On completion, before the work is merged:
    - Sync the branch to current base AGAIN and resolve — using the **Branch sync** section of `pr-protocol` (`git merge origin/<BASE>`, NEVER rebase).
    - THEN run the full test gate on the synced tree, so the PR reflects current `main` at merge time and any contract/gate test that landed after you branched is caught here rather than by the verifier.
+   - THEN run `python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main` on the synced tree — it must exit 0 (lineage file in the PR diff with valid receipts). A failure here is a verifier reject waiting to happen.
    - **End-to-end ownership**: you are responsible for the code being correct on the *current* base — builds clean, the full gate green, no regressions — before handing off. This is the same lane the worker already owns ("ACs observably pass + tests green", `references/roles/worker/responsibility.md`), reaffirmed against the synced tree.
 
 9. If unit tests and changes exist (and code-review iteration converged):

@@ -31,7 +31,7 @@ Write status bar state: `scanning|🔍 Scanning process/workflow...`
 1. **Read context sources**: Before scanning, read:
    - Your SOUL.md `### Improvement Scan` section for criteria and approval tiers
    - `.squidsquad/vault/BRIEFING.md` for active priorities and constraints
-   - Relevant vault decisions and patterns (`grep -rl "type: decision\|type: pattern" .squidsquad/vault/galaxy/ --include="*.md" | head -10`)
+   - Relevant vault decisions, rules, and patterns via the engine (never grep): `python references/scripts/vault_consume.py search --alias [ROLE] --tags <scan area keywords>`
    - Cross-reference vault content with current template instructions for contradictions or drift
 
 2. **Select files to scan**: Use the scan index for query-driven targeting:
