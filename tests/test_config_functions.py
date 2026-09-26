@@ -85,6 +85,7 @@ SAMPLE_CONFIG = """# SquidSquad Config
 - **Enabled**: yes
 - **Threshold**: 20
 - **Interval Hours**: 24
+- **Synthesis Interval Days**: 7
 
 ## Vault Remember
 

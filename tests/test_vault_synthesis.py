@@ -39,13 +39,16 @@ class TestVaultSynthesisStructure:
     def test_file_exists(self):
         assert (SUB_SKILLS_DIR / "roles/pm" / "vault-synthesis.md").exists()
 
-    def test_five_cycle_trigger(self, synthesis_text):
-        """#3139: Synthesis triggers after 5 consecutive quiet cycles."""
-        assert "5 consecutive quiet cycles" in synthesis_text
+    def test_harness_scheduled_trigger(self, synthesis_text):
+        """#14137 (supersedes the #3139 5-quiet-cycle counter, which never
+        fired in event mode): synthesis runs on a vault-maintenance event with
+        synthesis_due, scheduled by the harness at most weekly."""
+        assert "synthesis_due: true" in synthesis_text
+        assert "5 consecutive quiet cycles" not in synthesis_text
 
-    def test_separate_counter(self, synthesis_text):
-        """#3139: Synthesis counter is separate from improvement scan counter."""
-        assert "separate" in synthesis_text.lower() and "scan" in synthesis_text.lower()
+    def test_no_agent_side_counter(self, synthesis_text):
+        """#14137: the PM keeps no synthesis counter; the harness decides."""
+        assert "do not count quiet cycles" in synthesis_text
 
     def test_cross_agent_reading(self, synthesis_text):
         """#3139: Synthesis reads vault notes from ALL agents."""
