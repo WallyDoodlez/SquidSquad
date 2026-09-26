@@ -17,6 +17,7 @@ Usage:
     python scripts/tracker.py close <number>
     python scripts/tracker.py repair-status-labels [--apply] [--include-unshipped]  # #12914: strip stale status:pending-ship from CLOSED issues (dry-run unless --apply; no-shipped/#9837 set skipped unless --include-unshipped)
     python scripts/tracker.py check-gh                   # Verify gh access
+    python scripts/tracker.py write-probe                # #14181: push permission of the identity tracker writes with (true/false/inconclusive)
     python scripts/tracker.py --help
 
 Role authority (who may call `transition`):
@@ -679,6 +680,40 @@ def _resolve_status(name):
     sys.exit(1)
 
 
+def _push_permission_probe():
+    """#13574 probe: ``repos/:owner/:repo .permissions.push`` for the identity
+    this script writes with. ``_run_list_timeout`` GH_TOKEN-pins the call
+    (#13865), so the answer never depends on gh's flippable active account.
+    Returns ``(verdict, detail)``: verdict is ``"true"``, ``"false"`` or
+    ``"inconclusive"``."""
+    perm = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
+                              "-q", ".permissions.push"], timeout=15)
+    verdict = (perm.stdout or "").strip().lower()
+    if perm.returncode == 0 and verdict in ("true", "false"):
+        return verdict, ""
+    return "inconclusive", f"exit={perm.returncode}, out={verdict!r}"
+
+
+def write_probe():
+    """#14181: the forge write-capability probe for PM health-check and
+    pipeline-sentinel halt class (e). A bare ``gh api`` probe reads the active
+    account, which can be a read-only identity while tracker.py writes succeed
+    under the pinned one. That gives a false write-outage, or a false healthy
+    in the reverse case. Prints the verdict; exit 0 true, 1 false,
+    2 inconclusive."""
+    if _get_forge_adapter():
+        print("inconclusive")
+        print("NOTE: write-probe checks GitHub push permission; this install "
+              "uses a non-GitHub forge adapter.", file=sys.stderr)
+        return 2
+    verdict, detail = _push_permission_probe()
+    print(verdict)
+    if detail:
+        print(f"NOTE: write-permission probe inconclusive ({detail})",
+              file=sys.stderr)
+    return {"true": 0, "false": 1}.get(verdict, 2)
+
+
 def check_gh():
     """Verify forge backend connectivity (gh CLI or Forgejo API)."""
     adapter = _get_forge_adapter()
@@ -700,16 +735,14 @@ def check_gh():
     # the whole pipeline was write-frozen (no transitions, no labels, no push)
     # — invisible until a write failed mid-cycle. Verify push permission
     # cheaply via the repo endpoint (gh resolves :owner/:repo from CWD).
-    perm = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
-                              "-q", ".permissions.push"], timeout=15)
-    verdict = (perm.stdout or "").strip().lower()
-    read_only = (perm.returncode == 0 and verdict == "false")
-    if perm.returncode != 0 or verdict not in ("true", "false"):
+    verdict, detail = _push_permission_probe()
+    read_only = verdict == "false"
+    if verdict == "inconclusive":
         # Inconclusive (network blip, API shape change): the read check above
         # already proved connectivity — warn, do not block boot (fail-open on
         # uncertainty; only a definitive 'false' is the outage signature).
         print(f"WARNING: forge write-permission probe inconclusive "
-              f"(exit={perm.returncode}, out={verdict!r}) - proceeding on the "
+              f"({detail}) - proceeding on the "
               f"read check alone (#13574).", file=sys.stderr)
     # #13863: the checks above prove nothing about the *git push* path — the
     # credential-manager entry can vanish and gh's active account can flip to
@@ -734,9 +767,7 @@ def check_gh():
         print(doctor_err.strip(), file=sys.stderr)
         return False
     if read_only:
-        reprobe = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
-                                     "-q", ".permissions.push"], timeout=15)
-        if (reprobe.stdout or "").strip().lower() == "true":
+        if _push_permission_probe()[0] == "true":
             print("NOTE: gh active account was read-only (#13570 signature); "
                   "push-doctor healed it back to the pinned push identity "
                   "(#13863) - write capability re-verified.", file=sys.stderr)
@@ -2084,6 +2115,7 @@ def work_assign(target_alias, caller, issue=None, event_context=None, payload=No
 # unknown command (the dispatcher's existing error handles it).
 KNOWN_FLAGS = {
     "check-gh": set(),
+    "write-probe": set(),
     "list-issues": {"status"}, "list-bugs": {"status"},
     "list-tasks": {"status"}, "list-features": {"status"},
     "work-queue": set(),
@@ -2171,6 +2203,9 @@ def main():
 
     if cmd == "check-gh":
         sys.exit(0 if check_gh() else 1)
+
+    elif cmd == "write-probe":
+        sys.exit(write_probe())
 
     elif cmd in ("list-issues", "list-bugs"):
         if not pos:
