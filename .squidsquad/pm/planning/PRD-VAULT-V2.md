@@ -77,11 +77,11 @@ M0 snapshot & freeze → M1 mechanical transform (deterministic, tested; **porte
 | 4. Owner-label `-lead` drift (8 notes) | **Ported → M1 transform** (explicit story item) |
 | 5–10. STALE planned items | Superseded wholesale by the v2 rewrite |
 
-## Open decisions surfaced to operator (from TRD §11)
+## Decisions surfaced to operator (from TRD §11) — all resolved
 
-- **#3 rules-lane placement** — decision point: P4 drafting (PM recommendation forthcoming with sub-skill design).
-- **#4 distillation aggressiveness** — decision point: M3 manifest review (TRD recommendation: aggressive).
-- **#5 viewer priority** — decision point: any time before M4 scoping.
+- **#3 rules-lane placement** — LOCKED 2026-07-20 (operator, inline): dedicated `rule` type (`rule-*` galaxy notes); shipped in P4 #13860.
+- **#4 distillation aggressiveness** — LOCKED 2026-07-20 (operator, inline, recorded on #13862): AGGRESSIVE. The M3 manifest review keeps the operator's note-by-note veto.
+- **#5 viewer priority** — LOCKED 2026-07-20 (operator, inline, recorded on #13862): POST-CUTOVER; excluded from M4 scope, slots into the web-dashboard roadmap (#3963).
 - **#6 numeric defaults** — resolved inside P3 (compaction horizon) and P4 (dedupThreshold); config-overridable.
 
 ## Non-goals
