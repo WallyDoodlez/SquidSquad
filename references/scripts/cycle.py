@@ -164,6 +164,7 @@ def end_session(role=None, port=None, opener=None):
     nothing to do, 1 when it is unreachable or refused, 2 on a foreign role.
     Every outcome tells the caller to end its turn.
     """
+    import http.client
     import json
     import urllib.error
     import urllib.request
@@ -204,7 +205,14 @@ def end_session(role=None, port=None, opener=None):
         print(f"Harness refused the request (HTTP {e.code}) — end your turn "
               f"now.")
         return 1
-    except (urllib.error.URLError, OSError, ValueError) as e:
+    except ValueError as e:
+        # A reachable harness sent a body that is not JSON (JSONDecodeError,
+        # UnicodeDecodeError) — a protocol fault, not an outage.
+        print(f"Harness returned an invalid response ({e}) — end your turn "
+              f"now.")
+        return 1
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+        # Includes IncompleteRead: the harness died mid-response.
         print(f"Harness unreachable ({e}) — end your turn now; the operator "
               f"restarts the harness.")
         return 1

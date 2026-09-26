@@ -126,6 +126,24 @@ class TestEndSessionHelper:
         out = capsys.readouterr().out
         assert f"HTTP {code}" in out and "unreachable" not in out
 
+    def test_non_json_body_is_invalid_response(self, as_skill, capsys):
+        """DS r2 F3: a reachable harness with a malformed body is a protocol
+        fault, not an outage."""
+        def bad(req, timeout=None):
+            return _Resp(b"<html>oops</html>")
+        assert cycle.end_session(port=9, opener=bad) == 1
+        out = capsys.readouterr().out
+        assert "invalid response" in out and "unreachable" not in out
+
+    def test_incomplete_read_is_unreachable(self, as_skill, capsys):
+        """DS r2 F4: harness dying mid-response is handled, not a traceback."""
+        import http.client
+
+        def cut(req, timeout=None):
+            raise http.client.IncompleteRead(b"")
+        assert cycle.end_session(port=9, opener=cut) == 1
+        assert "Harness unreachable" in capsys.readouterr().out
+
     @pytest.mark.parametrize("post_body", [{}, {"success": "yes"}, ["x"]])
     def test_success_must_be_explicit(self, as_skill, post_body, capsys):
         """DS F3: only an explicit success:true counts as accepted."""
@@ -263,6 +281,9 @@ class TestInstructionsUseEndSession:
         rule = rule[:rule.index("#### 6.")]
         assert "python references/scripts/cycle.py end-session" in rule
         assert "your exit IS the signal" not in rule
+        # DS r2 F1: the step count matches the enumerated steps (3).
+        assert "three steps" in rule
+        assert re.search(r"^3\. ", rule, re.M) and not re.search(r"^4\. ", rule, re.M)
 
     @pytest.mark.parametrize("doc", ["docs/AGENT-RUNTIME.md",
                                      "docs/HARNESS-ARCH.md"])
