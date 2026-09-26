@@ -673,7 +673,7 @@ On quiet cycles (no task picked up): run a scan for process/workflow improvement
 
 → run sub-skill: vault-optimize
 
-On quiet cycles (no task picked up) when the vault has 20+ notes AND no improvement scan ran this cycle: run `vault_optimize.py` to prune, decay confidence on stale notes, reindex links, and score relevance. Config-gated via `Vault Optimize > Enabled` in `config.md`.
+On a `vault-maintenance` event (the harness-scheduled maintenance window): run the sub-skill's maintenance-window flow — analyze the queued notes, file contradictions and pruning proposals as `pending` tasks for the human (never applied), stamp `last_optimized`. On quiet cycles: compact your own telemetry shard.
 
 #### Step 6.7 — step:cycle/vault-synthesis
 

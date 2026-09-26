@@ -15,7 +15,7 @@ Every SquidSquad agent runs in its own git clone of the target repository. This 
 ## Branching
 
 - **Main branch** (or user-configured target): all agents push code here
-- **State branch** (`squid-squad`): shared coordination data — iterations, working state, health. Exists to separate agent state from code when branch workflow is enabled (feature branches for dev work)
+- **State branch** (`squid-squad`): RETIRED (operator, 2026-09-26, #14113; removal tracked in #14144). It used to hold iterations and working state apart from code. Event mode + harness-owned git made it redundant: agent state lives on main under `.squidsquad/<alias>/`, and `origin/squid-squad` had not moved since 2026-06-12. Do not reintroduce a separate state branch.
 - **Feature branches**: when branch workflow is on, dev work happens here before merging to main
 
 ## Why
