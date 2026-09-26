@@ -144,8 +144,9 @@ _BASH = shutil.which("bash")
 # file I/O (a transient lock on count.txt). It then exited 1 without counting,
 # which the launcher correctly reads as a crash, so the guard tripped at 3 with
 # count.txt still "1". The I/O now retries; a stub failure that survives the
-# retries exits 97 and is written to stub-errors.txt so it can never pass for
-# a scripted exit code.
+# retries exits 97 (recorded in stub-errors.txt when writable) so it can never
+# pass for a scripted exit code. read() opens directly: os.path.exists would
+# turn a transient stat error into "missing" and reset the count.
 _LAUNCH_STUB = (
     "import os, time\n"
     "def io(fn):\n"
@@ -158,10 +159,11 @@ _LAUNCH_STUB = (
     "            time.sleep(0.1)\n"
     "c = 'count.txt'\n"
     "def read():\n"
-    "    if not os.path.exists(c):\n"
+    "    try:\n"
+    "        with open(c) as f:\n"
+    "            return int(f.read())\n"
+    "    except FileNotFoundError:\n"
     "        return 0\n"
-    "    with open(c) as f:\n"
-    "        return int(f.read())\n"
     "try:\n"
     "    n = io(read)\n"
     "    def write():\n"
@@ -171,8 +173,11 @@ _LAUNCH_STUB = (
     "    seq = os.environ['SEQUENCE'].split(',')\n"
     "    code = int(seq[n]) if n < len(seq) else 0\n"
     "except Exception as e:\n"
-    "    with open('stub-errors.txt', 'a') as f:\n"
-    "        f.write(repr(e) + '\\n')\n"
+    "    try:\n"
+    "        with open('stub-errors.txt', 'a') as f:\n"
+    "            f.write(repr(e) + '\\n')\n"
+    "    except Exception:\n"
+    "        pass\n"
     "    raise SystemExit(97)\n"
     "raise SystemExit(code)\n"
 )
