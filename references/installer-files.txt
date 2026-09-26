@@ -77,6 +77,7 @@ references/scripts/triage.py
 references/scripts/v2_catalog_gate.py
 references/scripts/v2_link_stage.py
 references/scripts/vault_check.py
+references/scripts/vault_consume.py
 references/scripts/vault_entity.py
 references/scripts/vault_optimize.py
 references/scripts/vault_remember.py

@@ -977,7 +977,8 @@ def _pr_state_scope_violations(pr_number):
 
     Reuses the exact ``_is_state_file`` predicate the #11511 commit-time guard uses
     to strip these on feature-branch commits (``.squidsquad/`` + ``.claude/`` minus
-    the launcher-script allow-list), plus the ``_is_plan_body`` (#12750) exemption.
+    the launcher-script allow-list), plus the ``_is_lineage_file`` exemption
+    (#12750 plan bodies + #13860 CONTEXT-<n> / <n>-fix-plan lineage files).
 
     BOOTSTRAP PROPERTY (#13577, discovered live): this check evaluates against
     the merging clone's CURRENT predicate -- deliberately, since trusting the
@@ -1005,7 +1006,7 @@ def _pr_state_scope_violations(pr_number):
     if declared is None:
         return None
     return sorted(f for f in declared
-                  if _is_state_file(f) and not _is_plan_body(f))
+                  if _is_state_file(f) and not _is_lineage_file(f))
 
 
 def _merge_commit_sha(pr_number):
@@ -1619,6 +1620,32 @@ def _is_plan_body(path):
     return stem.isdigit()
 
 
+def _is_lineage_file(path):
+    """#13860 (VAULT-ARCH 9.3 receipt location rule): an issue's single
+    plan/lineage file rides the task branch and ships in the PR diff.
+
+    Superset of ``_is_plan_body`` (#12750): ``.squidsquad/<role>/planning/`` +
+    one of ``<n>-body.md`` (plan-in-PR), ``CONTEXT-<n>.md`` (planned-task
+    lineage) or ``<n>-fix-plan.md`` (bug-flow lineage, created at pickup). The
+    receipts (``## Vault context consumed`` / ``## Applicable rules``) live in
+    that file, and the verifier gate (``vault_consume.py check-receipts
+    --diff-base``) requires it IN the diff -- so stripping it would make the
+    gate unpassable. Same #11511 safety argument as the plan body: each is a
+    per-issue file, never rewritten every cycle, never shared across branches.
+    Bundle ``CONTEXT.md`` and legacy ``FEAT-*-CONTEXT.md`` stay stripped."""
+    if _is_plan_body(path):
+        return True
+    parts = path.split("/")
+    if len(parts) != 4 or parts[0] != ".squidsquad" or parts[2] != "planning":
+        return False
+    name = parts[3]
+    if name.startswith("CONTEXT-") and name.endswith(".md"):
+        return name[len("CONTEXT-"):-len(".md")].isdigit()
+    if name.endswith("-fix-plan.md"):
+        return name[: -len("-fix-plan.md")].isdigit()
+    return False
+
+
 def _auto_resolve_state_conflicts():
     """Auto-resolve unmerged state files (#8653).
 
@@ -1658,7 +1685,7 @@ def _auto_resolve_state_conflicts():
 
 def _state_blob_sizes(ref):
     """#13556 -- {path: byte-size} for every protected state/vault path at ``ref``
-    (``_is_state_file`` and not ``_is_plan_body``). Uses ``git ls-tree -r -l`` so
+    (``_is_state_file`` and not ``_is_lineage_file``). Uses ``git ls-tree -r -l`` so
     the size is read straight from the tree (no working-tree dependency).
 
     Returns ``None`` on any git failure (distinct from an empty ``{}``, which means
@@ -1679,7 +1706,7 @@ def _state_blob_sizes(ref):
         if len(parts) < 4:
             continue
         path = path.strip()
-        if not (_is_state_file(path) and not _is_plan_body(path)):
+        if not (_is_state_file(path) and not _is_lineage_file(path)):
             continue
         try:
             sizes[path] = int(parts[3])
@@ -2586,11 +2613,13 @@ def guard_staged_state():
     - On the configured working branch (or a detached/unknown HEAD): no-op.
     - On any other (feature) branch: unstage every staged file classified as
       state/ephemeral by ``_is_state_file`` (the same classifier ``commit_code``
-      uses), **except plan bodies** — ``_is_plan_body`` paths
-      (``.squidsquad/<role>/planning/<n>-body.md``) are exempted so a task's
-      committed plan rides the feature branch into the PR (plan-in-PR, #12750).
-      That carve-out is guard-local: ``commit_code`` / ``commit_state`` /
-      ``_auto_resolve_state_conflicts`` still treat plan bodies as state. The
+      uses), **except lineage files** — ``_is_lineage_file`` paths
+      (``.squidsquad/<role>/planning/`` ``<n>-body.md`` / ``CONTEXT-<n>.md`` /
+      ``<n>-fix-plan.md``) are exempted so a task's committed plan and its
+      vault receipts ride the feature branch into the PR (plan-in-PR, #12750;
+      receipts, #13860). That carve-out is guard-local: ``commit_code`` /
+      ``commit_state`` / ``_auto_resolve_state_conflicts`` still treat them as
+      state, so they reach a branch only via an explicit ``git add``. The
       stripped files stay in the working tree for the next working-branch cycle
       to commit: ``.squidsquad/`` files via ``commit_state``; ``.claude/`` files
       via the working branch's normal state-commit path (``commit_state`` stages
@@ -2622,7 +2651,7 @@ def guard_staged_state():
         p = raw.strip().strip('"')
         if not p:
             continue
-        if _is_state_file(p) and not _is_plan_body(p):
+        if _is_state_file(p) and not _is_lineage_file(p):
             state_staged.append(p)
     if not state_staged:
         return []
