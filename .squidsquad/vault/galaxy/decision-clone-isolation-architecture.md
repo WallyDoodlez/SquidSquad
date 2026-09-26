@@ -10,6 +10,7 @@ source: conversation
 links:
   - decision-pid-primary-liveness
   - decision-watchdog-supervisor
+last_optimized: 2026-09-26
 ---
 
 # Clone Isolation — Each Agent in Its Own Repo Clone

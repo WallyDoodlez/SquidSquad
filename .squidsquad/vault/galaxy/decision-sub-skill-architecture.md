@@ -8,6 +8,7 @@ status: active
 confidence: high
 source: code
 links: [code-conventions, learning-atomic-migration-strategy, squidsquad]
+last_optimized: 2026-09-26
 ---
 
 ## Context

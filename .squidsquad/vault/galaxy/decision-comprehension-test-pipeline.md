@@ -9,6 +9,7 @@ confidence: high
 source: conversation
 links:
   - decision-sub-skill-architecture
+last_optimized: 2026-09-26
 ---
 
 # Comprehension Test Pipeline

@@ -8,6 +8,7 @@ status: active
 confidence: high
 source: conversation
 links: [decision-self-healing-sentinel, human-profile]
+last_optimized: 2026-09-26
 ---
 
 ## Context

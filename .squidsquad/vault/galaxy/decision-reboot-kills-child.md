@@ -8,6 +8,7 @@ status: active
 confidence: medium
 source: conversation
 links: [decision-watchdog-supervisor]
+last_optimized: 2026-09-26
 ---
 
 ## Context

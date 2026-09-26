@@ -8,6 +8,7 @@ status: active
 confidence: high
 source: conversation
 links: []
+last_optimized: 2026-09-26
 ---
 
 ## Context

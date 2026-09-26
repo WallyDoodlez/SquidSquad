@@ -12,6 +12,7 @@ status: active
 confidence: high
 source: conversation
 links: [decision-async-no-pause-never-block-human, learning-stale-activity-not-dead-rule-out-limit-and-inline]
+last_optimized: 2026-09-26
 ---
 
 # Agents never stop while work is pending — all handoffs are transition-and-continue

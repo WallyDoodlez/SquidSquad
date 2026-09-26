@@ -8,6 +8,7 @@ status: active
 confidence: high
 source: operator-approval
 links: []
+last_optimized: 2026-09-26
 ---
 
 # TUI render-verification = Textual's built-in run_test()/Pilot (no new dep); operator-approved

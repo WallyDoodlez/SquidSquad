@@ -2,8 +2,8 @@
 
 - **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
 - **Team resumed (2026-09-26 ~09:59)**: harness restarted, all 4 agents running (was operator-paused 2026-07-20: skill/qa/dm stopped). Uncommitted operator WIP in primary clone: CRLF-normalized compose checksum fix (compose_freshness.py + test) — not PM's, do not touch.
-- **Status**: EVENT boot 2026-09-26 ~18:34 (quiet), respawn after deploy-signal 0ace8614f791e357. Boot drain 3 events: #14164 (BRIEFING over budget, assigned pm) FIXED in 81b89d23e (1661->1223 words, remaining 411) -> pending-test; #14114 shipped (dm).
-- **Updated**: 2026-09-26 ~18:55 — **HARNESS RESTART triggered (operator-authorized)** via POST /restart; recorded on #14144. **ON NEXT BOOT (post-restart verification)**: GET /status -> all 4 running + bootup_complete + EVENT; qa intent no longer `deploying` (was stuck since 18:30:57); then qa verifies #14144 AC6. Tell operator the result. Remaining operator Qs: #13862 M3 manifest, #14157, version bump 0.46.0.
+- **Status**: EVENT boot 2026-09-26 ~18:55 (quiet), post-harness-restart. Restart VERIFIED: harness 09594b75, all 4 running+booted, qa intent no longer deploying; state-branch teardown ran in all 4 clones. #14144 blocked:human-action removed + qa woken for AC6.
+- **Updated**: 2026-09-26 ~19:00 — IN FLIGHT: vault-maintenance event cb0af7abee1bdf6d (20 queued). Prune review filed #14178. Contradiction subagents running (2 clusters). Remaining: file contradictions, mark-optimized 20 slugs, ack event. Remaining operator Qs: #13862 M3 manifest, #14157, version bump 0.46.0.
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 

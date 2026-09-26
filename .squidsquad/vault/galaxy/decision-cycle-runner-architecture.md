@@ -9,6 +9,7 @@ confidence: high
 source: conversation
 links:
   - learning-commit-code-state-exclusion
+last_optimized: 2026-09-26
 ---
 
 # Cycle Runner — Mechanical Shell / Agent Core Split

@@ -12,6 +12,7 @@ status: active
 confidence: high
 source: review
 links: [learning-strip-vs-wire-audit-findings, learning-broadcast-deque-cannot-have-in-stream-gaps]
+last_optimized: 2026-09-26
 ---
 
 # Event-mode ack/retry lifecycle is intentionally deferred (Phase 4)

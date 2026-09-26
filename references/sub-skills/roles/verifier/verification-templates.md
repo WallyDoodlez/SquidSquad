@@ -77,9 +77,9 @@ TC result rules (unchanged):
 - FAIL: directly observed to be broken — include what you saw.
 - HUMAN-REQUIRED: TC cannot run because the environment is not set up (missing API key,
   Docker not running, etc.). This is NOT a code bug — a human must fix the environment.
-  Tag with `blocked:human-action` label and note what the human needs to do.
+  Tag with the `blocked:human-action` label (command in the gate below) and note what the human needs to do.
 - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
 
-**HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
+**HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the label with `python references/scripts/tracker.py add-labels [NUMBER] blocked:human-action`. Never use bare `gh issue edit --add-label`, which can run under a read-only gh identity and fail (#14151). Then comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
 
 Verifier reviews QA-RESULTS-<NUMBER>.md and makes the final decision.
