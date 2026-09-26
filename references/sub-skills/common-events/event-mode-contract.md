@@ -115,6 +115,11 @@ Monitor tool invocation:
 
 ### Harness-Loss Recovery (#9588)
 
-If the harness becomes unreachable AFTER `bootup-complete` has been emitted, the agent does **NOT** pivot to forge-direct work or any degraded mode mid-session. There is one recovery path, the listener-exit rule in **How You Listen** above (#14109): `event_poll.py --wait` retries transient errors with backoff and, after 10 consecutive failures, exits on its own (`sys.exit(2)`). That ends your Monitor watch **without** an expiry notice, so you end your session. If the harness process is still alive, its health poller sees your session die and respawns you; if the harness itself is dead, the operator restarts it. On any restart the boot bootstrap probes the harness and routes to polling mode if it is still unreachable (see `common/boot-bootstrap.md`). Do not retry `bootup-complete` in a loop while waiting — there is nothing to wait for inside the session.
+If the harness becomes unreachable at any point in an event-mode session, the agent does **NOT** pivot to forge-direct work or any degraded mode mid-session, and does not sit in a wait loop for the harness to come back. There is one recovery path (#14109):
+
+- **Listener armed** (the normal case): `event_poll.py --wait` retries transient errors with backoff and, after 10 consecutive failures, exits on its own (`sys.exit(2)`). The Monitor tool then reports that the watch ended — per the listener-exit rule in **How You Listen** above, that means you end your session.
+- **Listener not yet armed** (harness lost during boot steps 4–5 — the `bootup-complete` POST or the boot-drain `GET /events/for` still fails after the usual transient-error retries): end your session the same way. Never skip `bootup-complete` and carry on draining without it (the #13369 force-kill hazard).
+
+Either way, if the harness process is still alive its health poller sees your session die and respawns you; if the harness itself is dead, the operator restarts it. On any restart the boot bootstrap probes the harness and routes to polling mode if it is still unreachable (see `common/boot-bootstrap.md`).
 
 Rationale: agents log everything to the forge, so state is recoverable across a restart. The bespoke "degraded mode" that ran forge-direct from a live event-mode session was removed in #9588 in favor of polling-mode fallback at boot — a battle-tested mechanism without a third execution path to reason about.
