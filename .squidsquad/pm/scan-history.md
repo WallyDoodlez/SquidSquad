@@ -1,3 +1,59 @@
+## Scan — 2026-09-26 18:18 (burst 3/3)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (staleness), docs/VAULT-ARCH.md 10.1/10.5 (freeze scope), .squidsquad/config.md Vault Remember
+- **Findings**: freeze scope ambiguity for BRIEFING.md: asked on #13862 (no new issue). BRIEFING stale since 12:07; refresh HELD during the M0 freeze. Separately filed this stretch: #14162 (instruction-changing bugs lack ACs/CQ).
+- **Auto-fixed**: none (held for freeze)
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 17:18 (burst 2/3)
+
+- **Files scanned**: references/migrations/v0.45.0-to-v0.46.0.md, references/migrations/README.md, .squidsquad/pm/planning/PRD-VAULT-V2.md (layer split + M-track)
+- **Findings**: #14157 (pm, low, pending operator) — PRD-VAULT-V2 leaves other existing v1-vault installs without an upgrade transform (M1 is this-install only). P3/P5 changes are additive and automatic (no migration entry needed per README).
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 16:19 (burst 1/3, after reidle)
+
+- **Files scanned**: HITL tracking (working-state list vs tracker labels for #10024/#8702/#8698/#13854), references/scripts/model_router.py input handling + references/prompts/code-review.md.j2 (while verifying #14148 top-up)
+- **Findings**: #14150 (skill, low) — code-review returns clean NO_FINDINGS/exit 0 when every input file is skipped (silent review pass). HITL cluster: no gap (items sit in the status:pending backlog, advertised in the pending count).
+- **Auto-fixed**: none. #14148 closed after verification (balance USD 9.97, live call OK).
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 15:45 (burst 3/3)
+
+- **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, .squidsquad/project/dm.md (Version Bumps), .squidsquad/.ship-counter (primary vs DM clone), docs/CONFIGURATION.md Auto Versioning
+- **Findings**: none new. The DM 'bump held for PM/operator green-light' is the operator-paced gate already tracked as #13720 (pending); no release since v0.45.0 (2026-06-30). Counter: main=130, DM clone=144 (uncommitted, by design: harness commits at DM session end).
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 14:45 (burst 2/3)
+
+- **Files scanned**: references/sub-skills/common/vault-optimize.md, references/sub-skills/roles/pm/vault-synthesis.md, references/roles/pm/instructions.md (vault steps), docs/sub-skill-catalog.md vault rows, docs/VAULT-ARCH.md 7.4
+- **Findings**: #14137 (skill, low) — vault-synthesis dormant in event mode (quiet-cycle counter trigger unrealized; .last-synthesis 2026-05-31). Also: PM L2 step:cycle/vault-optimize prose still v1 (decay/reindex, config toggle) vs the rewritten propose-only sub-skill — already covered by in-flight #13861 AC4, not refiled.
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 13:45 (burst 1/3, fresh burst after reidle)
+
+- **Files scanned**: references/scripts/event_poll.py (startup hwm behavior, live repro), references/sub-skills/common-events/event-mode-contract.md (Monitor invocation)
+- **Findings**: #14128 (skill, low) — empty-hwm startup NUDGE is guaranteed on every 30-min Monitor re-arm post-#14099 → fleet-wide no-op wake per re-arm.
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 12:45 (burst 1/3)
+
+- **Files scanned**: references/sub-skills/** tracker.py transition examples (all roles) cross-checked vs tracker.py LEGAL_TRANSITIONS + ROLE_AUTHORITY
+- **Findings**: #14124 (skill, low) — DM delivery-packaging citation-gate route-back uses illegal pending-ship -> pending-test. #14125 (skill, low) — pipeline-sentinel Tier-1 stall recovery uses PM in-progress -> approved, authority is assignee-only.
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
+## Scan — 2026-09-26 10:46 (burst 1/3)
+
+- **Files scanned**: references/sub-skills/common-events/event-mode-contract.md, docs/AGENT-RUNTIME.md, .squidsquad/vault/BRIEFING.md
+- **Findings**: #14099 (skill, low, improvement-scan) — contract mandates `persistent: true` Monitor + unconditional end-session on Monitor exit; runtime Monitor (CC 2.1.281) has no persistent flag and expires at 30 min.
+- **Auto-fixed**: BRIEFING.md staleness — prepended 2026-09-26 resume increment (top increment was 2026-07-20) (own-domain, Tier 1). Corrected PM working-state: SS11 #3 already LOCKED 2026-07-20 (dedicated rule type), removed from HITL list.
+- **Items rejected by human**: none new
+
 ## Scan — 2026-07-20 04:13 (burst 3/3, driver capped)
 
 - **Files scanned**: references/sub-skills/ + references/roles/ (forward-looking cross-check: does any instruction doc contradict the amended SS9.3 lineage-file receipt location, ahead of P4/#13860)
@@ -680,32 +736,4 @@
 - **Findings**: none — all wikilinks resolve, including the two notes added this session ([[decision-vault-subagent-model-sonnet]] referencing [[VAULT-ARCH]], [[shipped-pre-2026-05-19]] linked from BRIEFING)
 - **Auto-fixed**: none
 - **Items rejected by human**: none
-
-## Scan — 2026-06-03 02:10
-
-- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs config.md + tracker state)
-- **Findings**: BRIEFING.md heavily stale — PRs #10378/#10379 listed in-flight but merged 2026-05-30; PRD-A/B/C/D-catalog/E1-E5 ships not reflected; E6 #10685 in-flight + 4 new umbrella PRDs #10836-#10839 + PRD-D #10781 missing from active priorities; #9242 harness-unreachable constraint stale (harness now reachable)
-- **Auto-fixed**: BRIEFING.md fully rewritten — current Active Priorities (E6 + PRD-D + 4 umbrellas + E7 + wiki-link + catalog cleanup), Recently Shipped (PRD-A/B/C/D-catalog/E1-E5 + TRD-polish settlement + TRD Claude final-pass), Recent Decisions (PRD-D 2-tier + #10836 Direction A + audit refresh strategy + skill OOM finding + post-E6 queue), Constraints (skill OOM, verifier boot intermittency)
-- **Items rejected by human**: (none)
-
-## Scan — 2026-06-03 03:08
-
-- **Files scanned**: .squidsquad/project/{pm.md,worker.md,worker-instructions.md} (L4 long-living context + legacy stubs); cross-reference against feedback_compose_dry + feedback_pm_docs_only memory rules
-- **Findings**: (1) PM L4 (pm.md) clean — docs-only boundary clearly stated, pure-orphan inline-delete exception preserved; aligns with last 2 cycles' actions (#10750 reroute, #9969 parking). (2) Worker L4 duplication: commit bd64e86f added "Front-loaded planning for batched issue work" section to BOTH worker.md AND worker-instructions.md — violates feedback_compose_dry (one authoring location). Self-resolves via #10836 Direction A (deletes worker-instructions.md as legacy stub). Added content-preservation gate to CONTEXT-10836.md.
-- **Auto-fixed**: CONTEXT-10836.md content-preservation gate documented for skill to honor at implementation time.
-- **Items rejected by human**: (none)
-
-## Scan — 2026-06-03 03:38
-
-- **Files scanned**: .squidsquad/project/{verifier.md,verifier-instructions.md,verifier-responsibility.md,verifier-soul-directives.md,pm-*.md,dm-*.md} (legacy L4 stub content-vs-unified-file inventory; follow-up to cycle 2084 worker.md finding)
-- **Findings**: (1) verifier-soul-directives.md contains 'Deterministic testing law' rule with #1291 incident cite — NOT in verifier.md. MIGRATION REQUIRED before stub deletion. (2) Bold-heading inventory across pm-*.md and dm-*.md flagged ~60 themes not appearing as bold headings in unified files — needs per-stub content comparison at implementation time (verifier finding proves bold-diff != content-diff).
-- **Auto-fixed**: CONTEXT-10836.md content-preservation gate expanded with specific verifier finding + hard rule (no stub deletion without per-stub audit log). Tracker comment on #10836 with same.
-- **Items rejected by human**: (none)
-
-## Scan — 2026-06-03 04:38
-
-- **Files scanned**: references/ grep — verify PHASE2-LOCKED-10781 premise (3 standing rules have zero → run sub-skill: invocations; 2 kept entries have positive invocations)
-- **Findings**: PHASE2-LOCKED-10781 premise CONFIRMED — self-restart/context-pressure/cycle-runner have 0 references/ invocations (correctly removed from catalog); boot-bootstrap + agent-lifecycle have 2 each in references/agent-instructions.md + references/roles/instructions.md (correctly kept). Post-E6 (after agent-instructions.md deletes), count drops to 1 each but still ≥1 threshold — Phase 2 lock stays valid.
-- **Auto-fixed**: none (verification scan only)
-- **Items rejected by human**: (none)
 
