@@ -30,7 +30,7 @@
   "references/roles/worker/web/instructions.md": "e265bd74df2712a341d043cb35ff66dc92571caf"
  },
  "12451_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "a430498f517bc843fff197c11af169b242479415"
+  "references/sub-skills/common-events/event-mode-contract.md": "4fef4197c235a0bde0bf4d1d74e4e1888ff74add"
  },
  "12473_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8"
@@ -108,7 +108,7 @@
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
  },
  "13335_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "a430498f517bc843fff197c11af169b242479415"
+  "references/sub-skills/common-events/event-mode-contract.md": "4fef4197c235a0bde0bf4d1d74e4e1888ff74add"
  },
  "13336_spec.json": {
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
@@ -195,7 +195,7 @@
  "8694_spec.json": {
   "references/sub-skills/common-events/comment-handling.md": "8d5a2a4ab4164fbdb3f5657f89ef08586bd5e254",
   "references/sub-skills/common-events/cursor-management.md": "e70f63d8d81fa0889240e64d38fbf8a0c8f0735a",
-  "references/sub-skills/common-events/event-mode-contract.md": "a430498f517bc843fff197c11af169b242479415",
+  "references/sub-skills/common-events/event-mode-contract.md": "4fef4197c235a0bde0bf4d1d74e4e1888ff74add",
   "references/sub-skills/common-events/forge-read-pattern.md": "682ba6f78e8f56c85a011ccbd3587a36224ce2c0",
   "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"
  },
@@ -217,7 +217,7 @@
  },
  "9588_spec.json": {},
  "9742_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "a430498f517bc843fff197c11af169b242479415"
+  "references/sub-skills/common-events/event-mode-contract.md": "4fef4197c235a0bde0bf4d1d74e4e1888ff74add"
  },
  "9743_spec.json": {
   "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"
