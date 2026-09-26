@@ -194,6 +194,11 @@
   "references/sub-skills/common-events/event-driven-workflow.md": "2d47d0caa358db04f63c49d0d5fe8883d1e758d7",
   "references/sub-skills/common-events/event-mode-contract.md": "005633ebfca2776ad7392c221e30e7e45eea5ba7"
  },
+ "14114_spec.json": {
+  "references/roles/instructions.md": "15f15107248f1507fde04a06357a6d2d92286aa2",
+  "references/sub-skills/common-events/event-driven-workflow.md": "1281976d7c0954afc0c5e6631f0fc6799b4e0721",
+  "references/sub-skills/common-events/event-mode-contract.md": "a1256647b747b91d788c96e41068a62115269ccb"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
