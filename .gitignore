@@ -1,5 +1,7 @@
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
+.squidsquad/.instance-id
+.squidsquad/.instance-id.tmp
 .squidsquad/*/current-state
 .squidsquad/*/.pid
 .squidsquad/*/.claude-pid
@@ -78,3 +80,11 @@ references/scripts/migrate_*.py.bak
 # same class as .claude/worktrees/ above. Confirmed never committed in repo
 # history before this entry.
 .claude/skills/
+
+# External-review working artifacts (#14055): review flows may save a diff
+# for a routed reviewer; these are per-run scratch, never versioned. Two
+# committed strays from May hijacked an agentic code-review (exit 0, wrong
+# target) before being removed.
+.deepseek-*.diff
+.deepseek-*.out
+.squidsquad/*/planning/.deepseek-*
