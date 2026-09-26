@@ -2,6 +2,7 @@
 type: learning
 tags: [verifier, testing, git, checkout, background-process, race-condition, gate-integrity]
 created: 2026-07-20
+updated: 2026-07-20
 owner: verifier
 status: active
 confidence: high
@@ -20,4 +21,5 @@ While verifying the #13863/#13865/#13855/#13847 credential-fix batch, I started 
 
 - Once you background a full-suite (or any nontrivial) test run, treat the working directory as locked until that run completes — no `checkout`, `stash`, `reset`, or `pull` in that clone until you've confirmed the background task finished (`TaskOutput` with `status: completed`).
 - If you need to verify a second branch while a suite runs on the first, either wait for the first to finish, or do the second verification's read-only work (issue/PR review, diff reading, forge queries) — none of which touch the working tree — and defer its own test execution until the first branch's run completes.
+- The output-capture side of the same discipline: [[learning-background-verification-pipe-truncation-masks-verdict]] — a backgrounded gate piped through `tail` loses the failure detail and reports the pipe's exit code, not the gate's.
 - If you realize a branch-switch happened mid-run: stop the task immediately (`TaskStop`) and discard its output — do not partially trust it. Rerun cleanly from the correct branch with no interruption.

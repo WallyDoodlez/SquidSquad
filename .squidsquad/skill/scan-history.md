@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-20 12:41
+
+- **Files scanned**: tests/test_tracker.py, references/scripts/tracker.py (work_queue)
+- **Findings**: none filed — scan absorbed into work: surfaced #13859 verifier round-1 FAIL (highest priority, picked up immediately)
+- **Criteria note**: work-queue DOES include status:open bugs (my earlier fallback was a missing-role-arg usage error, not an omission)
+
+
 ## Scan — 2026-07-20 10:39
 
 - **Files scanned**: tests/test_wizard.py, tests/test_vault_engine_installer_13857.py (production-caller coverage lens); pre-scan vault consult via the LIVE vault-search engine (first real production consumption — 12 telemetry events on this clone's shard)
@@ -615,12 +622,6 @@
 ## Scan — 2026-05-16 08:32
 
 - **Files scanned**: references/scripts/capability_check.py, references/scripts/forge_adapter.py
-- **Findings**: none
-- **Items rejected by human**: n/a
-
-## Scan — 2026-05-16 08:02
-
-- **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/shared_fs.py
 - **Findings**: none
 - **Items rejected by human**: n/a
 
