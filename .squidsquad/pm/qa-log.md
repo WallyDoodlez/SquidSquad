@@ -180,3 +180,5 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Verified**: FEAT-SKILL-033 — all 13 acceptance criteria pass. heartbeat.sh standalone script, boot scripts launch with PID management, mktree+commit-tree+push-f, PM reads heartbeat branches, config.md has Heartbeat Interval Seconds, SKILL.md Step 5c, agent-instructions.md PM Step 7 updated, dev CLAUDE.md clean, upgrade migration included, README dedicated section. BUG-SKILL-022 and BUG-SKILL-023 already Closed from prior cycles.
 - **Agent Health**: skill — unknown (no heartbeat branch yet, expected since heartbeat feature just deployed)
 - **Notes**: Iteration 125. FEAT-SKILL-033 shipped. Shipped Since Last Bump: 2/10.
+
+- [19:14:37] health: dm/pm/qa/skill all alive (pid). Write probe: bare gh active account (Naahtec) push=false = false alarm; pinned WallyDoodlez push=true -> filed #14181 (probe reads flippable account).

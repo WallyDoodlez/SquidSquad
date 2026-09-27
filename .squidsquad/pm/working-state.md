@@ -2,8 +2,12 @@
 
 - **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
 - **Team resumed (2026-09-26 ~09:59)**: harness restarted, all 4 agents running (was operator-paused 2026-07-20: skill/qa/dm stopped). Uncommitted operator WIP in primary clone: CRLF-normalized compose checksum fix (compose_freshness.py + test) — not PM's, do not touch.
-- **Status**: EVENT boot 2026-09-26 ~18:55 (quiet), post-harness-restart. Restart VERIFIED: harness 09594b75, all 4 running+booted, qa intent no longer deploying; state-branch teardown ran in all 4 clones. #14144 blocked:human-action removed + qa woken for AC6.
-- **Updated**: 2026-09-26 ~19:15 — HALTED for deploy-signal c1aee962d85f1f69 (after PR #14159 / #14151 merged, touched references/). Idle, no task in flight. Vault maintenance done (f634613ba): #14178 prune review, #14179/#14180 contradictions filed. #14144 unblocked for qa AC6. Remaining operator Qs: #13862 M3 manifest, #14157, version bump 0.46.0.
+- **Status**: EVENT boot 2026-09-26 19:14:52 (quiet), post-deploy-signal respawn. Boot drain: 2 events (#14151 shipped by dm), both tended. Pipeline healthy; filed #14181 (health-check write probe reads flippable active gh account -> false outage).
+- **Updated**: 2026-09-26 19:14:52 — idle, no task in flight. Remaining operator Qs: #13862 M3 manifest, #14157, version bump 0.46.0.
+
+- **Watch (19:40)**: PR #14182 (#14171 static-gate fix) is the chokepoint -- skill parked #14181 + #14133 at blocked on it; main gate red until merged. qa on #14150, harness shows qa waiting ~24m in a Monitor (likely long gate run); 8 items pending-test. Re-check qa progress next driver tick; halt threshold 90m.
+
+- **Operator wind-down (2026-09-26 19:59)**: operator said stop for today, let team finish, then pause all. Watcher (bg bcxvcnle3) stops skill when #14183 leaves in-progress, qa when #14162 leaves pending-test, dm once pending-ship queue empty + dm idle; then PM checkpoints + stops self. Idle driver cancelled (cron 37da7210 deleted). Parked on #14182/#14171 for next session: #14181, #14133, #14130.
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 
@@ -21,7 +25,7 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 - **#13561** — TUI observability, pending-human-review (PR #13945 operator doc-review gate).
 - **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN. (verified 05:45)
 - **#10377** — blocked:human-action (gated L4 DM curation task).
-- **#13807** — pending-human-setup: delete stale sibling dirs SquidSquad-web + SquidSquad-qa-omain (recovered from shipped #13793's untracked comment-only ask; PM closes on confirmation).
+- ~~#13807~~ operator approved 2026-09-26 ~20:10 -> routed to skill as #14184; #13807 parked blocked-on #14184, PM closes when #14184 ships.
 - **#10024 / #8702 / #8698** — doc-realignment cluster: approve #10024 as rescoped; rule on closing #8702 (rec: supersede) and #8698 (rec: re-scope or close).
 - **~128 `status:pending` backlog tasks** awaiting operator go-ahead (verified 2026-07-18).
 
@@ -29,4 +33,4 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 
 - work_queue(pm approved) = #13856 (vault-v2 PRD umbrella, tracking vehicle only) + #10690 GATED (E7/#10686 approved, not shipped) — neither pickable (re-verified 2026-09-26 10:20).
 - Parked coord-holds: #11092 / #10839 / #9968.
-- Idle-driver: reidled 2026-09-26 ~19:10 (scan_count 0/3), cron dc4fd7c0 (7,37 * * * *). Monitor task b5eyu5l15.
+- Idle-driver: armed 2026-09-26 19:14:52 (scan_count 0/3), cron 37da7210 (7,37 * * * *). Monitor task bwhw6y691.
