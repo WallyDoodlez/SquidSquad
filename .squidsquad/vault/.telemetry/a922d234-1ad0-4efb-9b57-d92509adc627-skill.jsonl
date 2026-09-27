@@ -58,3 +58,9 @@
 {"id":"a82e7046-6129-44d2-b264-c3b247b24948","ts":"2026-09-26T23:42:39.946Z","agent":"skill","task":14130,"slug":"learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep","counter":"impression"}
 {"id":"26715f99-95bd-4d24-8391-69046b4d582b","ts":"2026-09-26T23:42:39.946Z","agent":"skill","task":14130,"slug":"learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop","counter":"impression"}
 {"id":"58c31744-d314-45dc-8dc8-9cb3f9a292d9","ts":"2026-09-26T23:42:39.946Z","agent":"skill","task":14130,"slug":"pattern-verify-liveness-lifecycle-with-independent-runtime-probe","counter":"impression"}
+{"id":"a9b3fa77-5e92-417a-94ef-f7d25a2e0a2a","ts":"2026-09-27T00:01:56.128Z","agent":"skill","task":14183,"slug":"learning-sequential-phase-gates-are-prose-only-not-mechanical","counter":"impression"}
+{"id":"f0272ca7-6fc7-4e0e-b23b-11879330e7a8","ts":"2026-09-27T00:01:56.128Z","agent":"skill","task":14183,"slug":"learning-graceful-restart-grace-timer-on-wedged-agent","counter":"impression"}
+{"id":"e12535e3-8560-420a-aaa6-9ada4c4f23e2","ts":"2026-09-27T00:01:56.128Z","agent":"skill","task":14183,"slug":"learning-stall-vs-deepwork-before-nudging","counter":"impression"}
+{"id":"2dee3cba-6eae-476d-bfc0-a9dec56e5050","ts":"2026-09-27T00:01:56.128Z","agent":"skill","task":14183,"slug":"learning-resume-git-tree-is-truth","counter":"impression"}
+{"id":"717be756-a1b8-4b20-8821-8b1923de4e54","ts":"2026-09-27T00:01:56.128Z","agent":"skill","task":14183,"slug":"decision-reboot-kills-child","counter":"walked"}
+{"id":"cefd9e9f-6c59-4220-94f8-e375cbc8a915","ts":"2026-09-27T00:01:56.128Z","agent":"skill","task":14183,"slug":"learning-pr-conflicting-flag-can-be-cosmetic","counter":"walked"}

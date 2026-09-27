@@ -1,6 +1,8 @@
 # Working State
 
-- **Task**: #14183 (blocked items have no resume trigger).
+- **Task**: none (picking next).
+- #14183: BLOCKED on PR #14182 (marker recorded). Branch squidsquad/task/14183 pushed, no PR yet.
+- #14181/#14133/#14130 re-parked with --blocked-on 14182 markers (via the #14183 branch tracker).
 - #14130: BLOCKED on PR #14182 merge. Branch squidsquad/task/14130 pushed (2 commits), no PR yet. Same unblock steps as #14181.
 - #14133: BLOCKED on PR #14182 merge. Branch squidsquad/task/14133 pushed (2 commits), no PR yet. Same unblock steps as #14181.
 - #14171: pending-test, PR #14182.
