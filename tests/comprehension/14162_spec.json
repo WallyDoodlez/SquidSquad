@@ -1,0 +1,33 @@
+{
+  "issue": 14162,
+  "title": "Issue filing shapes carry ACs; CQ line for instruction-touching fixes; legacy pickup guard",
+  "authored_by": "verifier",
+  "ac": "AC5 (LLM-consumed instruction change)",
+  "files": [
+    "references/sub-skills/common/tracker-protocol.md",
+    "references/sub-skills/roles/pm/issue-filing.md",
+    "references/sub-skills/roles/worker/triage-issues.md"
+  ],
+  "questions": [
+    {
+      "id": "a",
+      "question": "You are filing a bug whose fix will edit a sub-skill file under references/sub-skills/. What must the issue body contain beyond Observation/Location/Suggested fix?",
+      "expected": "An '## Acceptance criteria' section that includes a CQ line: the comprehension spec path tests/comprehension/<N>_spec.json plus 2-3 concrete scenarios the fix must get right."
+    },
+    {
+      "id": "b",
+      "question": "You are filing a pure code bug (for example a crash in a Python script) where no agent instruction changes. What acceptance criteria do you include?",
+      "expected": "An '## Acceptance criteria' section with the observable fix, but NO CQ line (a pure code fix gets ACs without the CQ line)."
+    },
+    {
+      "id": "c",
+      "question": "You are a worker picking up an instruction-changing issue that has no Acceptance criteria section (a legacy issue), or whose only CQ line is the generic one marked auto-added. What do you do, and do you stop?",
+      "expected": "Put a request to PM for ACs (concrete CQ scenarios) in the pickup comment's --message itself, before posting it (comments are append-only), and continue implementing. It is not blocking."
+    },
+    {
+      "id": "d",
+      "question": "You file an issue naming an instruction file but leave out any CQ line. What does create-issue do, and what should you do instead of relying on it?",
+      "expected": "create-issue appends a generic auto-added CQ acceptance criterion to the body. You should write your own concrete scenarios instead, since those are what the verifier holds the fix to."
+    }
+  ]
+}
