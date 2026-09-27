@@ -199,6 +199,11 @@
   "references/sub-skills/common-events/event-driven-workflow.md": "1281976d7c0954afc0c5e6631f0fc6799b4e0721",
   "references/sub-skills/common-events/event-mode-contract.md": "a1256647b747b91d788c96e41068a62115269ccb"
  },
+ "14162_spec.json": {
+  "references/sub-skills/common/tracker-protocol.md": "a9ce2660ab51cb2c4bfad6b13d761e00d729cfb7",
+  "references/sub-skills/roles/pm/issue-filing.md": "8978622e8d168b7a0abc2f6da4629de6db8186e8",
+  "references/sub-skills/roles/worker/triage-issues.md": "c92978a42fb6efa8ffff18571515689bf7c67c10"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "e02d325b117361c8b3d4771a875894bd2e3cd720",
