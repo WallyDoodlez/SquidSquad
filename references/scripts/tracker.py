@@ -1115,6 +1115,39 @@ def add_labels(number, labels_str):
     print(f"#{number}: added labels {labels_str}")
 
 
+# #14162: issues skip PM intake, so an issue whose fix changes LLM-consumed
+# instructions could reach pickup with no comprehension (CQ) requirement.
+# Instruction surfaces: role layers, sub-skills, L4 project files, composed
+# agent files.
+_INSTRUCTION_SURFACE_RE = re.compile(
+    r"references[/\\](?:sub-skills|roles)(?![\w-])|\.squidsquad[/\\]project(?![\w-])"
+    r"|\bCLAUDE\.md\b|\bSOUL\.md\b")
+_CQ_MENTION_RE = re.compile(r"comprehension|\bCQ\b", re.IGNORECASE)
+_AC_HEADER_RE = re.compile(r"^##\s+Acceptance criteria\b", re.IGNORECASE | re.MULTILINE)
+_CQ_AC_LINE = (
+    "- **CQ** (auto-added, #14162): this issue names agent-instruction files, "
+    "so a fix that changes them needs a comprehension spec. The verifier authors "
+    "`tests/comprehension/<this issue>_spec.json` over the changed fragments, "
+    "and a fresh agent must answer the fixed behavior correctly. This line is "
+    "generic: the worker picking the issue up asks PM for concrete scenarios "
+    "(or to drop the line if the fix is code-only).\n")
+
+
+def _ensure_cq_acceptance_criteria(body):
+    """#14162: when ``body`` names an agent-instruction surface but carries no
+    CQ requirement, add a CQ acceptance criterion. It is appended as a line when
+    the body already ends in an ``## Acceptance criteria`` section, and as a
+    new section otherwise. Returns (body, added)."""
+    text = body or ""
+    if not _INSTRUCTION_SURFACE_RE.search(text) or _CQ_MENTION_RE.search(text):
+        return text, False
+    headers = list(_AC_HEADER_RE.finditer(text))
+    tail_is_ac = bool(headers) and "\n## " not in text[headers[-1].end():]
+    if tail_is_ac:
+        return text.rstrip() + "\n" + _CQ_AC_LINE, True
+    return text.rstrip() + "\n\n## Acceptance criteria\n" + _CQ_AC_LINE, True
+
+
 def create_issue(title, body, role, severity, reporter=None, extra_label=None):
     """Create an issue with correct label format.
 
@@ -1142,6 +1175,11 @@ def create_issue(title, body, role, severity, reporter=None, extra_label=None):
     if extra_label:
         labels = f"{labels},{extra_label}"
 
+    body, cq_added = _ensure_cq_acceptance_criteria(body)
+    if cq_added:
+        print("NOTE: body names agent-instruction files and has no CQ "
+              "requirement -- appended a CQ acceptance-criteria block (#14162).",
+              file=sys.stderr)
     full_body = body
     if reporter:
         full_body = f"**Reported By**: {reporter}\n**Severity**: {severity.title()}\n\n{body}"

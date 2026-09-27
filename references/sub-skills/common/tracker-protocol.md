@@ -105,7 +105,10 @@ python references/scripts/tracker.py create-issue \
 2. [step 2]
 
 **Expected**: [what should happen]
-**Actual**: [what does happen]" \
+**Actual**: [what does happen]
+
+## Acceptance criteria
+- [the observable fix]" \
   --role [owning-role] --severity [high|medium|low] --reporter [ROLE]-lead
 ```
 
@@ -136,12 +139,27 @@ python references/scripts/tracker.py create-issue \
   --title "improvement-scan: [short observation]" \
   --body "**Observation**: [what the scan found]
 **Location**: [file:line or symbol]
-**Suggested fix**: [one-line approach]" \
+**Suggested fix**: [one-line approach]
+
+## Acceptance criteria
+- [the observable fix]" \
   --role [owning-role] --severity low --reporter [ROLE]-lead \
   --extra-label improvement-scan
 ```
 
 `--extra-label improvement-scan` (#13743) is what actually applies the `improvement-scan` label the neighboring improvement-scan sub-skill instructs you to tag — `create-issue` has no other way to attach a label beyond the fixed type/severity/role/status set.
+
+**Every issue carries `## Acceptance criteria`, and instruction-touching issues carry a CQ criterion (#14162).** Issues skip PM intake, so the ACs you file are the ones the fix is verified against. Every issue shape here ends with an `## Acceptance criteria` section. When the likely fix changes LLM-consumed instructions (`references/sub-skills/`, `references/roles/`, L4 `.squidsquad/project/`, CLAUDE.md/SOUL.md), add a CQ line to it:
+
+```
+## Acceptance criteria
+- [the observable fix]
+- CQ: verifier authors tests/comprehension/<this issue>_spec.json; a fresh agent answers [2-3 scenarios the fix must get right]
+```
+
+A pure code fix gets ACs without the CQ line.
+
+If you name an instruction file and leave the CQ line out, `create-issue` appends a generic CQ block for you. Write your own scenarios instead; they are what the verifier holds the fix to.
 
 **Cross-role issue** — root cause is in another agent's domain (`--role` differs from `--reporter`):
 
@@ -155,7 +173,10 @@ python references/scripts/tracker.py create-issue \
 
 **Expected**: [expected]
 **Actual**: [actual]
-**Cross-filed from**: #[original-issue-number-if-any]" \
+**Cross-filed from**: #[original-issue-number-if-any]
+
+## Acceptance criteria
+- [the observable fix]" \
   --role [other-owning-role] --severity [high|medium|low] --reporter [your-role]-lead
 ```
 
