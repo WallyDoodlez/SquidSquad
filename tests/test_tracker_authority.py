@@ -549,14 +549,20 @@ class TestBlockedStatus:
             gh_calls.append(cmd)
             return FakeResult()
 
+        bodies = []
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_run_gh_with_body",
+                            lambda cmd, body, check=True: bodies.append(body) or FakeResult())
         monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
         monkeypatch.setattr(tracker, "_check_unread_feedback", lambda n, r: [])
 
-        tracker.transition(13515, "in-progress", "blocked", role="skill-lead")
+        # #14183: a park names its blocker, recorded as a marker comment.
+        tracker.transition(13515, "in-progress", "blocked", role="skill-lead",
+                           blocked_on="14182")
         tracker.transition(13515, "blocked", "in-progress", role="skill-lead")
 
         assert any("status:blocked" in str(c) for c in gh_calls)
+        assert any("<!-- squidsquad:blocked-on 14182 -->" in b for b in bodies)
 
 
 # ---------------------------------------------------------------------------

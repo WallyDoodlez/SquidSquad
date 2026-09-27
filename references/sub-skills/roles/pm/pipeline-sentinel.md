@@ -40,7 +40,7 @@ gh issue list --label squidsquad --state open --json number,title,labels,updated
 
 **2.1 Detect a halt — by lack of PROGRESS, not by absence of comments.** A **halt** is *no forward progress on a non-terminal item past **90 minutes*** (3 cycles). Forward progress means a **status/label change or a PR push** — **NOT** a new comment. Treat any non-terminal item past threshold with no status/label/PR movement as a halt candidate, **regardless of comment activity**.
 
-> **`status:blocked` is excluded from halt detection (#13515).** An item at `status:blocked` is *intentionally* not moving — the assignee still owns it but has parked it because it is blocked on another party (a PM-authored AC, a dependency PR, a human decision). Sitting at `blocked` for a long time is expected, not a stall — do not treat it as a halt candidate and do not nudge it. (The blocking condition itself — e.g. the PM AC or dependency PR — may separately warrant its own halt check; that is tracked against whatever item embodies the blocker, not against the parked task.)
+> **`status:blocked` is excluded from halt detection (#13515).** An item at `status:blocked` is *intentionally* not moving — the assignee still owns it but has parked it because it is blocked on another party (a PM-authored AC, a dependency PR, a human decision). Sitting at `blocked` for a long time is expected, not a stall — do not treat it as a halt candidate and do not nudge it. (The blocking condition itself — e.g. the PM AC or dependency PR — may separately warrant its own halt check; that is tracked against whatever item embodies the blocker, not against the parked task.) The exclusion holds only while the park's recorded blocker is still open: a park whose blocker has resolved but which is still `blocked` is a stranded park, checked in **4h** (#14183).
 
 > **Failed-handoff sub-rule (the case the old "no recent comments = stalled" test missed):** an item is halted **even when recent comments exist** if those comments carry an **unactioned ask/handoff while the owning agent is idle**. A recent comment is NOT progress.
 
@@ -175,8 +175,16 @@ gh issue list --label squidsquad --label status:in-progress --state open --json 
 
 > **Note (#13602):** if this returns exactly 500 items, the query is at its cap and some in-progress items may be **invisible to the double-pickup check** — the anomaly detector this section exists to run would then silently miss exactly the thing it's for. Raise `--limit` further before trusting a clean read.
 For each role with >=2 `status:in-progress` items:
-- **Tier 1**: Comment on each of that role's in-progress items — `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PM pipeline-sentinel: [role] holds N status:in-progress items simultaneously (#[other numbers]). If one is a parked block-and-continue, transition it to status:blocked; otherwise this may be a double-pickup — investigate."` This is advisory (not a halt/unblock) — the flagged agent reconciles at its next pickup.
+- **Tier 1**: Comment on each of that role's in-progress items — `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PM pipeline-sentinel: [role] holds N status:in-progress items simultaneously (#[other numbers]). If one is a parked block-and-continue, transition it to status:blocked with --blocked-on <N>; otherwise this may be a double-pickup — investigate."` This is advisory (not a halt/unblock) — the flagged agent reconciles at its next pickup.
 - **Tier 2**: Only file a bug if the same role still shows >=2 `status:in-progress` on the NEXT sentinel run after the Tier-1 nudge (i.e. it did not self-resolve to one active + one `blocked`) — `"Role [role] held >=2 status:in-progress items across 2 consecutive pipeline-sentinel runs (#[numbers]). Possible true double-pickup, or the agent is not using status:blocked for parked work."`
+
+**4h. Stranded park** (#14183) — a `status:blocked` item whose recorded blocker resolved more than 90 minutes ago and which its owner has not resumed. The blocker's resolution emits no event about the parked item, so the owner only sees it on its next `work_queue()` read; an idle owner whose improvement-scan driver has quiesced can go hours without one. Run:
+```bash
+python references/scripts/tracker.py blocked-resumable --min-age 90
+```
+It lists each such item with its `role` and `blocked_on`; items whose park recorded no blocker (`blocker_unrecorded: true`, pre-#14183 parks) are always listed. For each:
+- Wake the owner: `python references/scripts/tracker.py work-assign --target-alias <role> --caller pm --issue <n> --event-context "stranded park: blocker resolved"`. Only the assignee may transition `blocked -> in-progress`, so a wake is PM's whole remedy here — never a bare comment (it wakes no one).
+- If the same item is still listed on the NEXT sentinel run after the wake, treat it as a halt and continue at **2.2** (usually (b) dead-agent or (a) failed-handoff).
 
 <!-- #9478: branch+PR is the only mode; all checks above run unconditionally. -->
 

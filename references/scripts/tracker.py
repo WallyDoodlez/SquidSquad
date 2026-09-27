@@ -9,13 +9,14 @@ Usage:
     python scripts/tracker.py list-tasks <role> [--status] (alias: list-features)
     python scripts/tracker.py create-issue --title <t> --body <b> --role <r> --severity <s> [--reporter <name>] [--extra-label <label>]  (alias: create-bug)
     python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>] [--extra-label <label>]   (alias: create-feature)
-    python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
+    python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force] [--blocked-on <N>[,<N>]]  # --blocked-on required when parking (#14183)
     python scripts/tracker.py comment <number> --role <r> --message <m>
     python scripts/tracker.py work-assign --target-alias <alias> [--caller <alias>] [--issue <n>] [--event-context <ctx>] [--payload <json>]  # #12495 manual wake (no transition)
     python scripts/tracker.py get-labels <number>
     python scripts/tracker.py get-state <number>
     python scripts/tracker.py close <number>
     python scripts/tracker.py repair-status-labels [--apply] [--include-unshipped]  # #12914: strip stale status:pending-ship from CLOSED issues (dry-run unless --apply; no-shipped/#9837 set skipped unless --include-unshipped)
+    python scripts/tracker.py blocked-resumable [--role <r>] [--min-age <minutes>]  # #14183: parked items whose recorded blocker resolved
     python scripts/tracker.py check-gh                   # Verify gh access
     python scripts/tracker.py --help
 
@@ -43,6 +44,12 @@ Legal transitions: in-progress -> blocked (park), blocked -> in-progress
 (resume). Authority: _assignee only, both directions. `blocked` items are
 excluded from `work_queue()` (not actionable while parked) and from PM
 pipeline-sentinel's stall detection (they are intentionally idle).
+
+Parking records the blocker (#14183): `transition <n> in-progress blocked`
+requires `--blocked-on <N>[,<N>]` and posts a machine-readable marker comment.
+Once every recorded blocker is closed/merged/shipped, `work_queue()` lists the
+item again (status `blocked`, `resumable: true`) so its owner resumes it even
+after a respawn; `blocked-resumable` is PM pipeline-sentinel's view of the same.
 """
 
 import json
@@ -50,6 +57,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -1029,11 +1037,122 @@ def list_all_open():
     return issues
 
 
+# #14183: a park records its blocker on the forge, so resuming never depends on
+# the parking agent's conversation context (a respawn clears that). The blocker
+# is usually a DIFFERENT item (a dependency PR, a human ticket), so its
+# resolution emits no event naming the parked one; work_queue() and PM's
+# pipeline-sentinel read this marker instead.
+_BLOCKED_ON_MARKER_RE = re.compile(r"<!--\s*squidsquad:blocked-on\s+([0-9,\s]+?)\s*-->")
+
+
+def _parse_blocked_on_arg(value):
+    """``"14182"`` / ``"#14182, #14190"`` -> ``[14182, 14190]``; None if absent
+    or not purely issue numbers."""
+    if value is None or value is True:
+        return None
+    parts = [p.strip().lstrip("#") for p in str(value).split(",")]
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    return [int(p) for p in parts]
+
+
+def _latest_blocked_on(comment_bodies):
+    """Blocker numbers from the LAST park marker (a re-park supersedes), or
+    None when the item was never parked with one (pre-#14183 park)."""
+    found = None
+    for body in comment_bodies:
+        for m in _BLOCKED_ON_MARKER_RE.finditer(body or ""):
+            nums = [int(x) for x in re.findall(r"\d+", m.group(1))]
+            if nums:
+                found = nums
+    return found
+
+
+def _blocker_resolution(number):
+    """``(resolved, resolved_at)`` for one blocker issue/PR. Resolved means
+    closed (covers a merged or closed PR and a closed issue) or at
+    ``status:shipped``. ``(None, None)`` when the lookup fails: unknown is
+    treated as unresolved by callers, and the next read retries."""
+    res = _run_list_timeout(["gh", "api", f"repos/:owner/:repo/issues/{number}"],
+                            timeout=15)
+    if res.returncode != 0:
+        return None, None
+    try:
+        data = json.loads(res.stdout or "{}")
+    except json.JSONDecodeError:
+        return None, None
+    labels = {(l or {}).get("name", "") for l in data.get("labels", [])}
+    if data.get("state") == "closed" or "status:shipped" in labels:
+        return True, data.get("closed_at")
+    return False, None
+
+
+def blocked_items(role=None):
+    """Open ``status:blocked`` items (optionally for one role) with their
+    recorded blockers and whether those have resolved (#14183).
+
+    Each entry: ``{number, title, role, blocked_on, resumable, resolved_at,
+    blocker_unrecorded}``. ``resumable`` is True when every recorded blocker
+    has resolved, OR when no blocker was recorded (a pre-#14183 park the owner
+    must re-check and re-park with ``--blocked-on``, rather than strand).
+    """
+    cmd = ["gh", "issue", "list", "--label", "status:blocked", "--state", "open",
+           "--json", "number,title,labels,comments", "--limit", "100"]
+    if role:
+        cmd[3:3] = ["--label", f"role:{role}"]
+    res = _run_list(cmd, check=False)
+    if res.returncode != 0:
+        print(f"ERROR: gh failed: {res.stderr}", file=sys.stderr)
+        return []
+    items = json.loads(res.stdout) if (res.stdout or "").strip() else []
+    cache = {}
+    out = []
+    for item in items:
+        owner = next((l["name"][len("role:"):] for l in item.get("labels", [])
+                      if l["name"].startswith("role:")), None)
+        nums = _latest_blocked_on(c.get("body", "") for c in item.get("comments", []))
+        entry = {"number": item["number"], "title": item["title"], "role": owner,
+                 "blocked_on": nums or [], "resumable": False,
+                 "resolved_at": None, "blocker_unrecorded": nums is None}
+        if nums is None:
+            entry["resumable"] = True
+        else:
+            states = [cache.setdefault(n, _blocker_resolution(n)) for n in nums]
+            if all(r is True for r, _at in states):
+                entry["resumable"] = True
+                entry["resolved_at"] = max((at or "") for _r, at in states) or None
+        out.append(entry)
+    return out
+
+
+def blocked_resumable(role=None, min_age_minutes=0):
+    """CLI: blocked items whose blockers resolved at least ``min_age_minutes``
+    ago (unrecorded-blocker parks always listed). Backs pipeline-sentinel's
+    stranded-park check (#14183 AC3)."""
+    now = datetime.now(timezone.utc)
+    hits = []
+    for e in blocked_items(role):
+        if not e["resumable"]:
+            continue
+        if min_age_minutes and e["resolved_at"]:
+            try:
+                at = datetime.fromisoformat(e["resolved_at"].replace("Z", "+00:00"))
+            except ValueError:
+                at = None
+            if at and (now - at).total_seconds() < min_age_minutes * 60:
+                continue
+        hits.append(e)
+    print(json.dumps(hits, indent=2))
+    return hits
+
+
 def work_queue(role):
     """Return a single prioritized work list for an agent role.
 
     Priority order (strict):
     1. In-progress items (resume first)
+    1b. Blocked items whose recorded blockers resolved (#14183) — status
+        ``blocked`` with ``resumable: true``; resume via blocked -> in-progress
     2. Approved issues — severity:high → medium → low
     3. Approved tasks — priority:high → medium → low
     4. Open issues — severity:high → medium → low
@@ -1095,6 +1214,26 @@ def work_queue(role):
             "status": status,
             "_sort": (status_rank, type_rank, prio_rank),
         })
+
+    # #14183: parked items resurface once their recorded blockers resolve (or
+    # when the park recorded none), right after in-progress work. Only fetched
+    # when this role has any blocked item, so the common path costs nothing.
+    if any(_get_label(i, "status:") == "blocked" for i in items):
+        types = {i["number"]: _get_label(i, "type:") for i in items}
+        for e in blocked_items(role):
+            if not e["resumable"]:
+                continue
+            queue.append({
+                "number": e["number"],
+                "title": e["title"],
+                "type": types.get(e["number"]) or "issue",
+                "priority": "medium",
+                "status": "blocked",
+                "resumable": True,
+                "blocked_on": e["blocked_on"],
+                "blocker_unrecorded": e["blocker_unrecorded"],
+                "_sort": (0.5, 0, 0),
+            })
 
     queue.sort(key=lambda x: x["_sort"])
     # Remove sort key from output
@@ -1585,7 +1724,8 @@ _GUARDED_TRANSITIONS = {
 }
 
 
-def transition(number, from_status, to_status, role=None, force=False):
+def transition(number, from_status, to_status, role=None, force=False,
+               blocked_on=None):
     """Transition an issue status with legality + role authority enforcement.
 
     Args:
@@ -1599,9 +1739,25 @@ def transition(number, from_status, to_status, role=None, force=False):
               change (#12475). Does NOT bypass the ship-integrity gates
               (TC-coverage on pending-test->pending-ship; unmerged PR/branch on
               ->shipped) — those remain hard invariants even under --force.
+        blocked_on: blocker issue/PR number(s) (``"14182"`` or ``"#1,#2"``).
+              Required (fail-closed, exit 2) for a transition INTO
+              ``status:blocked`` unless ``force``; recorded as a marker
+              comment after the transition lands (#14183).
     """
     from_label = _resolve_status(from_status)
     to_label = _resolve_status(to_status)
+
+    # 0. #14183: a park must name its blocker, checked before any forge write.
+    blockers = _parse_blocked_on_arg(blocked_on)
+    if to_label == "status:blocked" and not blockers and not force:
+        print("ERROR: parking to status:blocked requires --blocked-on <N>[,<N>] "
+              "(the issue/PR you are waiting on; #14183). Without it nothing "
+              "resurfaces the item once the blocker resolves.", file=sys.stderr)
+        sys.exit(2)
+    if blocked_on is not None and not blockers:
+        print(f"ERROR: --blocked-on must be issue/PR number(s), got {blocked_on!r}",
+              file=sys.stderr)
+        sys.exit(2)
 
     # 1. Enforce legal transitions (bypassable with --force — #12475)
     #    --force is the human override: it permits setting status to ANY value,
@@ -1820,6 +1976,15 @@ def transition(number, from_status, to_status, role=None, force=False):
             if result.returncode != 0 and "already closed" not in result.stderr.lower():
                 print(f"WARNING: gh issue close #{number} failed: {result.stderr.strip()}",
                       file=sys.stderr)
+
+    # #14183: record the blocker in machine-readable form on the forge.
+    if to_label == "status:blocked" and blockers:
+        refs = ", ".join(f"#{n}" for n in blockers)
+        comment(number, role or "tracker",
+                f"Parked (status:blocked), blocked-on: {refs}. Resurfaces in "
+                f"work_queue() once every blocker is closed, merged or shipped.\n"
+                f"<!-- squidsquad:blocked-on {','.join(map(str, blockers))} -->",
+                _suppress_event=True)
 
     # Emit status-transition event on every transition (#5856)
     try:
@@ -2091,7 +2256,8 @@ KNOWN_FLAGS = {
     "create-bug": {"title", "body", "role", "severity", "reporter", "extra-label"},
     "create-task": {"title", "body", "role", "priority", "reporter", "extra-label"},
     "create-feature": {"title", "body", "role", "priority", "reporter", "extra-label"},
-    "transition": {"role", "force"},
+    "transition": {"role", "force", "blocked-on"},
+    "blocked-resumable": {"role", "min-age"},
     "comment": {"role", "message"},
     "work-assign": {"target-alias", "caller", "issue", "event-context", "payload"},
     "get-labels": set(),
@@ -2219,7 +2385,16 @@ def main():
             int(pos[0]), pos[1], pos[2],
             role=opts.get("role"),
             force=opts.get("force", False),
+            blocked_on=opts.get("blocked-on"),
         )
+
+    elif cmd == "blocked-resumable":
+        min_age = opts.get("min-age", 0)
+        if min_age is not True and not str(min_age).isdigit():
+            print("Usage: tracker.py blocked-resumable [--role <r>] [--min-age <minutes>]",
+                  file=sys.stderr)
+            sys.exit(2)
+        blocked_resumable(opts.get("role"), int(min_age) if min_age is not True else 0)
 
     elif cmd == "comment":
         if not pos or "role" not in opts or "message" not in opts:
