@@ -143,6 +143,49 @@ def test_park_posts_machine_readable_marker(forge):
     assert tracker._latest_blocked_on(forge.issues[10]["comments"]) == [20, 21]
 
 
+def test_quoted_marker_is_ignored():
+    # Review F4: a quote-reply keeps the marker text behind "> ".
+    assert tracker._latest_blocked_on([
+        "**skill-lead**: Parked\n<!-- squidsquad:blocked-on 5 -->",
+        "> **skill-lead**: Parked\n> <!-- squidsquad:blocked-on 99 -->\nok"]) == [5]
+
+
+def test_marker_post_failure_exits_loudly_not_traceback(forge, capsys):
+    # Review F2: the label already moved; a failed marker post must be a clean
+    # non-zero exit that says how to recover, never an unhandled traceback.
+    import subprocess as sp
+    forge.add(11, ["role:skill", "status:in-progress", "type:issue"])
+
+    def fail(cmd, body, check=True):
+        raise sp.CalledProcessError(1, cmd, stderr="rate limited")
+
+    tracker._run_gh_with_body = fail  # restored by the forge fixture's monkeypatch
+    with pytest.raises(SystemExit) as e:
+        tracker.transition(11, "in-progress", "blocked", role="skill-lead",
+                           blocked_on="20")
+    assert e.value.code == 1
+    assert "marker was not posted" in capsys.readouterr().err
+    assert "status:blocked" in forge.issues[11]["labels"]
+
+
+def test_at_query_cap_blocked_items_are_still_checked(forge, capsys, monkeypatch):
+    # Review F5: a blocked item outside the first 100 open items still surfaces.
+    for n in range(1000, 1100):
+        forge.add(n, ["role:skill", "status:approved", "type:task"])
+    forge.add(5000, ["role:skill", "status:blocked", "type:issue"])
+    real = forge.run_list
+
+    def capped(cmd, check=True, **kw):
+        res = real(cmd, check=check, **kw)
+        if "status:blocked" not in [str(c) for c in cmd]:
+            rows = [r for r in json.loads(res.stdout) if r["number"] != 5000][:100]
+            return _R(json.dumps(rows))
+        return res
+
+    monkeypatch.setattr(tracker, "_run_list", capped)
+    assert _queue(capsys)[5000]["resumable"] is True
+
+
 def test_latest_marker_wins_and_absent_is_none():
     assert tracker._latest_blocked_on(["plain text"]) is None
     assert tracker._latest_blocked_on([

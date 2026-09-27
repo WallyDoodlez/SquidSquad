@@ -1042,7 +1042,10 @@ def list_all_open():
 # is usually a DIFFERENT item (a dependency PR, a human ticket), so its
 # resolution emits no event naming the parked one; work_queue() and PM's
 # pipeline-sentinel read this marker instead.
-_BLOCKED_ON_MARKER_RE = re.compile(r"<!--\s*squidsquad:blocked-on\s+([0-9,\s]+?)\s*-->")
+# Line-anchored: a quote-reply prefixes the marker line with "> ", so quoting
+# an old park comment can never become the "latest" blocker record.
+_BLOCKED_ON_MARKER_RE = re.compile(
+    r"^<!--\s*squidsquad:blocked-on\s+([0-9,\s]+?)\s*-->", re.M)
 
 
 def _parse_blocked_on_arg(value):
@@ -1072,7 +1075,11 @@ def _blocker_resolution(number):
     """``(resolved, resolved_at)`` for one blocker issue/PR. Resolved means
     closed (covers a merged or closed PR and a closed issue) or at
     ``status:shipped``. ``(None, None)`` when the lookup fails: unknown is
-    treated as unresolved by callers, and the next read retries."""
+    treated as unresolved by callers, and the next read retries.
+
+    A PR closed WITHOUT merging also counts as resolved, deliberately: the
+    dependency will never land as the park assumed, so the owner must resume
+    and reassess rather than stay parked on a dead blocker."""
     res = _run_list_timeout(["gh", "api", f"repos/:owner/:repo/issues/{number}"],
                             timeout=15)
     if res.returncode != 0:
@@ -1218,7 +1225,8 @@ def work_queue(role):
     # #14183: parked items resurface once their recorded blockers resolve (or
     # when the park recorded none), right after in-progress work. Only fetched
     # when this role has any blocked item, so the common path costs nothing.
-    if any(_get_label(i, "status:") == "blocked" for i in items):
+    # At the 100-item cap a blocked item may be outside `items`, so check anyway.
+    if len(items) >= 100 or any(_get_label(i, "status:") == "blocked" for i in items):
         types = {i["number"]: _get_label(i, "type:") for i in items}
         for e in blocked_items(role):
             if not e["resumable"]:
@@ -1977,14 +1985,21 @@ def transition(number, from_status, to_status, role=None, force=False,
                 print(f"WARNING: gh issue close #{number} failed: {result.stderr.strip()}",
                       file=sys.stderr)
 
-    # #14183: record the blocker in machine-readable form on the forge.
+    # #14183: record the blocker in machine-readable form on the forge. The
+    # label already moved, so a failed post must not crash mid-transition: the
+    # park then reads as unrecorded (work_queue resurfaces it for a re-park),
+    # and the caller gets a loud non-zero exit after the event below.
+    marker_failed = None
     if to_label == "status:blocked" and blockers:
         refs = ", ".join(f"#{n}" for n in blockers)
-        comment(number, role or "tracker",
-                f"Parked (status:blocked), blocked-on: {refs}. Resurfaces in "
-                f"work_queue() once every blocker is closed, merged or shipped.\n"
-                f"<!-- squidsquad:blocked-on {','.join(map(str, blockers))} -->",
-                _suppress_event=True)
+        try:
+            comment(number, role or "tracker",
+                    f"Parked (status:blocked), blocked-on: {refs}. Resurfaces in "
+                    f"work_queue() once every blocker is closed, merged or shipped.\n"
+                    f"<!-- squidsquad:blocked-on {','.join(map(str, blockers))} -->",
+                    _suppress_event=True)
+        except Exception as e:  # CalledProcessError, adapter errors, ...
+            marker_failed = f"{type(e).__name__}: {str(e)[:200]}"
 
     # Emit status-transition event on every transition (#5856)
     try:
@@ -2016,6 +2031,12 @@ def transition(number, from_status, to_status, role=None, force=False,
         pass
 
     print(f"#{number}: {from_label} -> {to_label}")
+    if marker_failed:
+        print(f"ERROR: #{number} is parked but its blocked-on marker was not "
+              f"posted ({marker_failed}). Re-run: tracker.py transition "
+              f"{number} blocked in-progress, then park again with "
+              f"--blocked-on (#14183).", file=sys.stderr)
+        sys.exit(1)
     return True
 
 
