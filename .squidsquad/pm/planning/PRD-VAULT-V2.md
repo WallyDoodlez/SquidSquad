@@ -67,6 +67,8 @@ Package the portable engine, invoked via the Skill tool; establish the engine bo
 
 M0 snapshot & freeze → M1 mechanical transform (deterministic, tested; **ported from #10838**: owner-label normalization `<role>-lead` → class values; plus dropping retired fields `confidence`/`source`/`links` from existing notes) → M2 distillation (analyze-only; §11 #4 aggressiveness decided at M3) → M3 human gate (operator manifest review) → M4 cutover & unfreeze (+ #13854 doc reconciliation, S4.5 catalog rides here, §11 #5 viewer call any time before this).
 
+- **No framework migration needed (decided 2026-09-26, #14157)**: the operator confirmed there is no install base beyond this repo, so no other install carries a v1 vault. The M1 transform stays this-install only, and v0.46.0 ships no vault-note migration step. Revisit if an install on v0.45.0 or earlier with a non-empty vault turns up before a public release.
+
 ## Ported from #10838 (v1 alignment PRD — closing as superseded)
 
 | #10838 finding | v2 disposition |

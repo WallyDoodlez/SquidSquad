@@ -52,7 +52,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
    - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
 
-   → run sub-skill: `tracker-protocol` — use the **Improvement-scan finding** one-liner shape (Observation / Location / Suggested-fix body). Set `--role [target-role]`, `--severity low` for issue findings, `--priority low` for task findings, `--reporter [ROLE]-lead`. Tag every finding with the `improvement-scan` label so PM and human can filter them.
+   → run sub-skill: `tracker-protocol` — use the **Improvement-scan finding** one-liner shape (Observation / Location / Suggested-fix body plus `## Acceptance criteria`, with a CQ line when the fix changes agent instructions, #14162). Set `--role [target-role]`, `--severity low` for issue findings, `--priority low` for task findings, `--reporter [ROLE]-lead`. Tag every finding with the `improvement-scan` label so PM and human can filter them.
 
 6. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
    ```bash

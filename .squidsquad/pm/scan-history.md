@@ -1,3 +1,10 @@
+## Scan — 2026-09-26 19:40 (burst 1/3)
+
+- **Files scanned**: .squidsquad/skill/CLAUDE.md L1 Soul block-and-continue, references/sub-skills/common-events/event-mode-contract.md Case D, references/sub-skills/roles/pm/pipeline-sentinel.md 2.1, references/scripts/tracker.py blocked transitions, #13515 design
+- **Findings**: #14183 (skill, low): status:blocked has no resume trigger; the Soul says "a forge event surfaces the change", but the blocker is a different item. Live exposure: #14181/#14133 are parked on PR #14182. (suggest-targets returned code/archive files, skipped as out of PM lane.)
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
 ## Scan — 2026-09-26 18:18 (burst 3/3)
 
 - **Files scanned**: .squidsquad/vault/BRIEFING.md (staleness), docs/VAULT-ARCH.md 10.1/10.5 (freeze scope), .squidsquad/config.md Vault Remember
@@ -701,39 +708,4 @@
 - **Findings**: pr_create/pr_merge still emit with role:unknown — already tracked (#5782 shipped but incomplete). No new findings
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
-
-## Scan — 2026-05-19 14:18
-
-- **Files scanned**: references/sub-skills/common/boot-remote-agents.md (cross-referenced against memory feedback_manual_agents, .squidsquad/pm/CLAUDE.md:617,666,1786, and live user request to boot dm+skill cycle 1497)
-- **Findings**: #9272 — boot-remote-agents.md line 16 "PM does not boot agents directly" contradicts feedback_manual_agents and live user practice
-- **Auto-fixed**: none (Tier 2 — fragment lives in skill domain)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-19 14:54
-
-- **Files scanned**: .squidsquad/config.md (cross-referenced compose.py:1202 MANDATORY_ROLES, composed CLAUDE.md line 181 across pm/qa/dm/skill)
-- **Findings**: #9318 — Dev Agents value stale since #6055 (qa became mandatory; should be just "skill")
-- **Auto-fixed**: none (Tier 2 — touches config + compose + recompose across 4 roles)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-19 20:15
-
-- **Files scanned**: references/scripts/git_ops.py (cross-referenced cycle-1500 unknown ghost cleanup + scan-history 2026-05-08 entry + #5782)
-- **Findings**: git_ops.py:90 still has `role = "unknown"` fallback — upstream source of the harness state corruption. #5782 was supposed to fix it but shipped incomplete. Added as evidence to #9242 fix-proposal item #3.
-- **Auto-fixed**: none (skill domain; touches event emission semantics)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-25 11:13
-
-- **Files scanned**: repo-wide grep for dated model-version strings (claude-{sonnet,opus,haiku}-{3,4}-*) across references/, docs/, .squidsquad/
-- **Findings**: none — zero violations of `feedback_model_tier_not_version` in spec/process files. Two hits in historical planning artifacts (`.squidsquad/qa/planning/FEAT-QA-5040-QA-RESULTS.md` line 3, `.squidsquad/pm/planning/FEAT-PM-4083-TEST-PLAN.md` line 116) are frozen test-result/test-case records — version-pinned by intent, acceptable per the memory rule's historical-record exception
-- **Auto-fixed**: none
-- **Items rejected by human**: none
-
-## Scan — 2026-05-25 13:13
-
-- **Files scanned**: full vault wikilink integrity check via `vault_check.py check-wikilinks`
-- **Findings**: none — all wikilinks resolve, including the two notes added this session ([[decision-vault-subagent-model-sonnet]] referencing [[VAULT-ARCH]], [[shipped-pre-2026-05-19]] linked from BRIEFING)
-- **Auto-fixed**: none
-- **Items rejected by human**: none
 
